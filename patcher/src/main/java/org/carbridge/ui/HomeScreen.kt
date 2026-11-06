@@ -45,12 +45,15 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -93,6 +96,7 @@ import org.carbridge.JobStep
 import org.carbridge.Setup
 import org.carbridge.SourceApp
 import org.carbridge.UserMessage
+import org.carbridge.Version
 
 class HomeActions(
     val allowInstalls: () -> Unit,
@@ -226,7 +230,8 @@ private fun GuidePanel(modifier: Modifier = Modifier, content: @Composable Colum
     val signs = LocalSigns.current
     Surface(modifier, shape = SignShape, color = signs.guide, contentColor = signs.onGuide, shadowElevation = 2.dp) {
         Column(
-            Modifier.padding(5.dp).border(2.dp, signs.onGuide, SignBorderShape).padding(horizontal = 18.dp, vertical = 16.dp),
+            Modifier.padding(5.dp).border(2.dp, signs.onGuide, SignBorderShape)
+                .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
             content = content,
         )
     }
@@ -409,51 +414,81 @@ private fun SetupDone(onShow: () -> Unit) {
 @Composable
 private fun CarSign(copy: CarCopy, busy: Boolean, onUpdate: () -> Unit, onRemove: () -> Unit) {
     val signs = LocalSigns.current
-    Column(Modifier.fillMaxWidth().padding(horizontal = Gutter, vertical = 6.dp)) {
+    var menu by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().padding(horizontal = Gutter, vertical = 4.dp)) {
+        if (copy.outdated) UpdateTab()
         GuidePanel(Modifier.fillMaxWidth()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                AppIcon(copy.icon, 52)
-                Spacer(Modifier.width(14.dp))
+                AppIcon(copy.icon, 40)
+                Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(copy.label, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(copy.label, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
                         when {
-                            copy.original == null -> "The original app is gone, so this copy can't be updated."
-                            copy.outdated -> "${copy.original.label} was updated. Update the car copy to match."
-                            else -> "In Android Auto"
+                            copy.original == null -> "Original removed"
+                            copy.outdated -> "${versionText(copy.version!!, copy.originalVersion!!)} → " +
+                                versionText(copy.originalVersion, copy.version)
+                            else -> copy.version?.name ?: "In Android Auto"
                         },
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodySmall,
                         color = signs.onGuideMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
-            }
-            Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.End) {
-                TextButton(
-                    onClick = onRemove,
-                    enabled = !busy,
-                    colors = ButtonDefaults.textButtonColors(contentColor = signs.onGuide),
-                ) {
-                    Icon(Icons.Rounded.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Remove")
+                if (copy.outdated) {
+                    Button(
+                        onClick = onUpdate,
+                        enabled = !busy,
+                        colors = ButtonDefaults.buttonColors(containerColor = signs.caution, contentColor = signs.onCaution),
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                    ) { Text("Update") }
                 }
-                if (copy.original != null) {
-                    Spacer(Modifier.width(8.dp))
-                    val colors = if (copy.outdated) {
-                        ButtonDefaults.buttonColors(containerColor = signs.caution, contentColor = signs.onCaution)
-                    } else {
-                        ButtonDefaults.buttonColors(containerColor = signs.onGuide, contentColor = signs.guide)
+                Box {
+                    IconButton(onClick = { menu = true }, enabled = !busy) {
+                        Icon(Icons.Rounded.MoreVert, contentDescription = "More for ${copy.label}", tint = signs.onGuide)
                     }
-                    Button(onClick = onUpdate, enabled = !busy, colors = colors) {
-                        Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Update")
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        if (copy.original != null) {
+                            DropdownMenuItem(
+                                text = { Text("Update copy") },
+                                leadingIcon = { Icon(Icons.Rounded.Refresh, contentDescription = null) },
+                                onClick = { menu = false; onUpdate() },
+                            )
+                        }
+                        DropdownMenuItem(
+                            text = { Text("Remove from car") },
+                            leadingIcon = { Icon(Icons.Rounded.Delete, contentDescription = null) },
+                            onClick = { menu = false; onRemove() },
+                        )
                     }
                 }
             }
         }
     }
 }
+
+/** A sign-yellow tab on top of the panel, like the exit tab on a guide sign. */
+@Composable
+private fun UpdateTab() {
+    val signs = LocalSigns.current
+    Surface(
+        Modifier.padding(start = 20.dp),
+        shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp),
+        color = signs.caution,
+        contentColor = signs.onCaution,
+    ) {
+        Text(
+            "UPDATE READY",
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+        )
+    }
+}
+
+/** Version name, or the build number when both sides share a name (e.g. a same-name rebuild). */
+private fun versionText(version: Version, other: Version): String =
+    version.name?.takeIf { it != other.name } ?: "build ${version.code}"
 
 @Composable
 private fun AppIcon(icon: ImageBitmap, sizeDp: Int) {

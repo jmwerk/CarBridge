@@ -26,8 +26,14 @@ data class CarCopy(
     val packageName: String,
     val icon: ImageBitmap,
     val original: SourceApp?,
-    val outdated: Boolean,
-)
+    val version: Version?,
+    val originalVersion: Version?,
+) {
+    /** True when the original app has been updated past the version this copy was made from. */
+    val outdated get() = version != null && originalVersion != null && originalVersion.code > version.code
+}
+
+data class Version(val code: Long, val name: String?)
 
 data class Catalog(val copies: List<CarCopy>, val available: List<SourceApp>)
 
@@ -54,9 +60,10 @@ object AppCatalog {
                 packageName = info.packageName,
                 icon = pm.getApplicationIcon(info).toImageBitmap(),
                 original = original,
-                outdated = original != null && versionOf(pm, originalPkg) != versionOf(pm, info.packageName),
+                version = versionOf(pm, info.packageName),
+                originalVersion = original?.let { versionOf(pm, originalPkg) },
             )
-        }.sortedBy { it.label.lowercase() }
+        }.sortedWith(compareBy({ !it.outdated }, { it.label.lowercase() }))
 
         val copied = copies.mapNotNull { it.original?.info?.packageName }.toSet()
         val available = sources.values.filter { it.info.packageName !in copied }.sortedBy { it.label.lowercase() }
@@ -70,8 +77,8 @@ object AppCatalog {
         sizeBytes = (listOf(sourceDir) + splitSourceDirs.orEmpty()).sumOf { File(it).length() },
     )
 
-    private fun versionOf(pm: PackageManager, pkg: String): Long? =
-        runCatching { pm.getPackageInfo(pkg, 0).longVersionCode }.getOrNull()
+    private fun versionOf(pm: PackageManager, pkg: String): Version? =
+        runCatching { pm.getPackageInfo(pkg, 0).let { Version(it.longVersionCode, it.versionName) } }.getOrNull()
 
     private fun Drawable.toImageBitmap(): ImageBitmap {
         val bitmap = Bitmap.createBitmap(ICON_PX, ICON_PX, Bitmap.Config.ARGB_8888)
