@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A guide-sign panel: inset white border with an exit arrow -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="3"
+        android:pathData="M39,31h30a8,8 0 0 1 8,8v30a8,8 0 0 1 -8,8h-30a8,8 0 0 1 -8,-8v-30a8,8 0 0 1 8,-8z" />
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="7" android:strokeLineCap="round"
+        android:pathData="M44,66L60,50" />
+    <path android:fillColor="#FFFFFF" android:pathData="M51,41h17v17z" />
+</vector>

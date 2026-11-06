@@ -10,8 +10,11 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 
 object Installer {
-    private val _events = MutableSharedFlow<String>(extraBufferCapacity = 8)
-    val events: SharedFlow<String> = _events
+    /** Outcome of one install session; [message] is null on success. */
+    data class Result(val packageName: String?, val success: Boolean, val cancelled: Boolean, val message: String?)
+
+    private val _events = MutableSharedFlow<Result>(extraBufferCapacity = 8)
+    val events: SharedFlow<Result> = _events
 
     /** Streams the base and split APKs into one install session; Android then asks the user to confirm. */
     fun install(context: Context, apks: List<File>, packageName: String) {
@@ -37,8 +40,8 @@ object Installer {
         }
     }
 
-    internal fun report(message: String) {
-        _events.tryEmit(message)
+    internal fun report(result: Result) {
+        _events.tryEmit(result)
     }
 }
 
@@ -52,11 +55,11 @@ class InstallStatusReceiver : BroadcastReceiver() {
                 val confirm = intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java) ?: return
                 context.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             }
-            PackageInstaller.STATUS_SUCCESS ->
-                Installer.report("Installed $pkg. Reconnect Android Auto to see it in the car launcher.")
+            PackageInstaller.STATUS_SUCCESS -> Installer.report(Installer.Result(pkg, true, false, null))
             else -> {
                 val msg = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
-                Installer.report("Install failed ($status): $msg")
+                val cancelled = status == PackageInstaller.STATUS_FAILURE_ABORTED
+                Installer.report(Installer.Result(pkg, false, cancelled, "Install failed ($status): $msg"))
             }
         }
     }
