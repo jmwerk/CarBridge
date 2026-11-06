@@ -26,6 +26,14 @@ class ManifestPatcher(private val log: (String) -> Unit) {
         apk.refreshTable()
     }
 
+    /** Split APKs must carry the same package name as the base; car entries live in the base only. */
+    fun patchSplit(apk: ApkModule, newPackage: String) {
+        val manifest = apk.androidManifest ?: error("split has no AndroidManifest.xml")
+        renamePackage(apk, manifest, newPackage)
+        apk.refreshManifest()
+        if (apk.hasTableBlock()) apk.refreshTable()
+    }
+
     private fun addCarEntries(apk: ApkModule, manifest: AndroidManifestBlock, app: ResXmlElement) {
         app.getOrCreateAndroidAttribute("appCategory", ID_APP_CATEGORY).setValueAsDecimal(APP_CATEGORY_GAME)
         ensureMeta(app, "distractionOptimized") { it.setValueAsBoolean(true) }
@@ -108,13 +116,18 @@ class ManifestPatcher(private val log: (String) -> Unit) {
                 if (v in declared) attr.setValueAsString(renameValue(v, old, newPackage))
             }
         }
-        for (provider in manifest.applicationElement.listElements("provider")) {
+        for (provider in manifest.applicationElement?.listElements("provider").orEmpty()) {
             val attr = provider.searchAttributeByResourceId(ID_AUTHORITIES) ?: continue
             if (attr.valueType == ValueType.REFERENCE) {
                 renameStringResource(apk, attr.valueAsResourceId, old, newPackage)
             } else {
                 attr.stringOrNull()?.let { attr.setValueAsString(renameValue(it, old, newPackage)) }
             }
+        }
+
+        // A shared user must have one signer, so the copy can't join the original's
+        root.searchAttributeByResourceId(ID_SHARED_USER_ID)?.let { attr ->
+            attr.stringOrNull()?.let { attr.setValueAsString(renameValue(it, old, newPackage)) }
         }
 
         manifest.packageName = newPackage
@@ -158,6 +171,7 @@ class ManifestPatcher(private val log: (String) -> Unit) {
     companion object {
         // android.R.attr ids, verified against android-36 android.jar
         private const val ID_NAME = 0x01010003
+        private const val ID_SHARED_USER_ID = 0x0101000b
         private const val ID_PERMISSION = 0x01010006
         private const val ID_READ_PERMISSION = 0x01010007
         private const val ID_WRITE_PERMISSION = 0x01010008

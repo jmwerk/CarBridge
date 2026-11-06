@@ -13,8 +13,8 @@ object Installer {
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val events: SharedFlow<String> = _events
 
-    /** Streams the APK into an install session; Android then asks the user to confirm. */
-    fun install(context: Context, apk: File, packageName: String) {
+    /** Streams the base and split APKs into one install session; Android then asks the user to confirm. */
+    fun install(context: Context, apks: List<File>, packageName: String) {
         val installer = context.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
             setAppPackageName(packageName)
@@ -22,9 +22,11 @@ object Installer {
         }
         val sessionId = installer.createSession(params)
         installer.openSession(sessionId).use { session ->
-            session.openWrite("base.apk", 0, apk.length()).use { out ->
-                apk.inputStream().use { it.copyTo(out) }
-                session.fsync(out)
+            for (apk in apks) {
+                session.openWrite(apk.name, 0, apk.length()).use { out ->
+                    apk.inputStream().use { it.copyTo(out) }
+                    session.fsync(out)
+                }
             }
             val intent = Intent(context, InstallStatusReceiver::class.java)
             val pending = PendingIntent.getBroadcast(

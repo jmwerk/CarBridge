@@ -15,15 +15,30 @@ class ManifestPatcherTest {
         assertEquals("a.b.car", ManifestPatcher.renameValue("a.b", "a.b", "a.b.car"))
     }
 
-    /** Patches a real APK so the output can be checked with aapt2; skipped without a fixture. */
+    /**
+     * Patches a real APK, or a directory holding base.apk plus split_*.apk, so the output can be
+     * checked with aapt2. Skipped without -PpatchFixture.
+     */
     @Test
-    fun patchesFixtureApk() {
-        val fixture = System.getProperty("patchFixture")
+    fun patchesFixture() {
+        val fixture = System.getProperty("patchFixture")?.let(::File)
         assumeTrue("no -PpatchFixture given", fixture != null)
-        val out = File(System.getProperty("patchOut")).apply { parentFile.mkdirs() }
-        ApkModule.loadApkFile(File(fixture!!)).use { apk ->
-            ManifestPatcher(::println).patch(apk, apk.androidManifest.packageName + ".car")
-            apk.writeApk(out)
+        val outDir = File(System.getProperty("patchOut")).parentFile.apply { deleteRecursively(); mkdirs() }
+
+        val base = if (fixture!!.isDirectory) File(fixture, "base.apk") else fixture
+        val splits = if (fixture.isDirectory) fixture.listFiles { f -> f.name.startsWith("split_") }!!.toList() else emptyList()
+        val patcher = ManifestPatcher(::println)
+
+        val newPackage = ApkModule.loadApkFile(base).use { it.androidManifest.packageName + ".car" }
+        ApkModule.loadApkFile(base).use { apk ->
+            patcher.patch(apk, newPackage)
+            apk.writeApk(File(outDir, "base.apk"))
+        }
+        for (split in splits) {
+            ApkModule.loadApkFile(split).use { apk ->
+                patcher.patchSplit(apk, newPackage)
+                apk.writeApk(File(outDir, split.name))
+            }
         }
     }
 }

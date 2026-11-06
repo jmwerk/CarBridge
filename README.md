@@ -1,8 +1,8 @@
 # aa-launcher-spike
 
 > **Phase 1 status (2026-11-06):** the `patcher` module (**CarBridge**, working name) does the
-> whole patch → sign → install flow on the phone. VLC 3.7.1 patched by CarBridge runs its full UI
-> in Android Auto. See [CarBridge](#carbridge-phase-1) below.
+> whole patch → sign → install flow on the phone. VLC 3.7.1 (single APK) and Firefox 159.0.1
+> (base + 2 split APKs) patched by CarBridge run their full UI in Android Auto. See [CarBridge](#carbridge-phase-1) below.
 
 Throwaway spike for an original GPL-3.0 tool that shows ordinary phone apps on Android Auto.
 It answers two questions before any real code gets written:
@@ -133,11 +133,16 @@ JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradle
 - Apps with `minSdk < 18` get a v1 signature using SHA1withRSA, so the Keystore key must allow
   SHA-1. Keystore keys can't be changed after creation.
 - Authorities inside `<queries>` are lookups, not declarations, and must not be renamed.
+- Split APKs must carry the renamed package too; all parts are signed with the same key and
+  installed in one `PackageInstaller` session.
+- `android:sharedUserId` must be renamed as well, or the copy tries to join the original's shared
+  user and fails with `INSTALL_FAILED_SHARED_USER_INCOMPATIBLE`.
 - The newest AndroidX libraries need AGP 9.1 and compileSdk 37; versions are pinned for AGP 8.13.
 
 ### Known gaps
 
-- **Split APKs** (most Play Store apps) aren't supported yet. They show as disabled.
+- Apps protected by Play Integrity, signature checks or license verification will refuse to run
+  after re-signing. Nothing can be done about that from the outside.
 - Authorities hardcoded in an app's code still point at the original package. Sharing or
   file-provider features may break.
 - The signing key dies with CarBridge's data. After an uninstall or a data clear, existing car

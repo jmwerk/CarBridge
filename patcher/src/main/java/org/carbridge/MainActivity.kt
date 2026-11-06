@@ -46,7 +46,7 @@ import org.carbridge.patch.PatchPipeline
 private const val TAG = "CarBridge"
 
 data class PatchableApp(val label: String, val info: ApplicationInfo, val patched: Boolean) {
-    val isSplit get() = !info.splitSourceDirs.isNullOrEmpty()
+    val apkCount get() = 1 + (info.splitSourceDirs?.size ?: 0)
 }
 
 class MainActivity : ComponentActivity() {
@@ -102,10 +102,10 @@ class MainActivity : ComponentActivity() {
             log.clear()
             scope.launch {
                 try {
-                    val apk = withContext(Dispatchers.IO) { PatchPipeline(this@MainActivity, ::append).patch(app.info) }
+                    val apks = withContext(Dispatchers.IO) { PatchPipeline(this@MainActivity, ::append).patch(app.info) }
                     append("Installing ${PatchPipeline.carPackageName(app.info.packageName)}")
                     withContext(Dispatchers.IO) {
-                        Installer.install(this@MainActivity, apk, PatchPipeline.carPackageName(app.info.packageName))
+                        Installer.install(this@MainActivity, apks, PatchPipeline.carPackageName(app.info.packageName))
                     }
                 } catch (e: Throwable) {
                     // Throwable: apksig/ARSCLib can throw Errors (e.g. missing JDK classes on Android)
@@ -136,7 +136,7 @@ class MainActivity : ComponentActivity() {
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     items(apps, key = { it.info.packageName }) { app ->
-                        AppRow(app, enabled = !busy && !app.isSplit) { patch(app) }
+                        AppRow(app, enabled = !busy) { patch(app) }
                     }
                 }
             }
@@ -149,8 +149,8 @@ class MainActivity : ComponentActivity() {
             Column(Modifier.weight(1f)) {
                 Text(app.label)
                 val note = when {
-                    app.isSplit -> "Split APK, not supported yet"
                     app.patched -> "Car copy installed"
+                    app.apkCount > 1 -> "${app.info.packageName} · ${app.apkCount} APKs"
                     else -> app.info.packageName
                 }
                 Text(note, style = MaterialTheme.typography.bodySmall)

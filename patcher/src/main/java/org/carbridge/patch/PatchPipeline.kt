@@ -6,39 +6,52 @@ import com.reandroid.apk.ApkModule
 import com.reandroid.archive.writer.ZipAligner
 import java.io.File
 
-/** Original APK in, signed car-enabled APK out. Runs off the main thread. */
+/** Original APK(s) in, signed car-enabled APK(s) out, base first. Runs off the main thread. */
 class PatchPipeline(private val context: Context, private val log: (String) -> Unit) {
 
-    fun patch(app: ApplicationInfo): File {
-        require(app.splitSourceDirs.isNullOrEmpty()) { "split APKs aren't supported yet" }
-
+    fun patch(app: ApplicationInfo): List<File> {
         val work = File(context.cacheDir, "patch").apply { deleteRecursively(); mkdirs() }
-        val unsigned = File(work, "unsigned.apk")
-        val signed = File(work, "${app.packageName}.car.apk")
+        val newPackage = carPackageName(app.packageName)
+        val splits = app.splitSourceDirs.orEmpty().map(::File)
+        val base = File(app.sourceDir)
 
-        log("Reading ${File(app.sourceDir).length() / 1024 / 1024} MB APK")
-        val minSdk: Int
-        ApkModule.loadApkFile(File(app.sourceDir)).use { apk ->
+        val totalMb = (splits + base).sumOf { it.length() } / 1024 / 1024
+        log("Reading $totalMb MB in ${splits.size + 1} APK(s)")
+
+        val patcher = ManifestPatcher(log)
+        val unsignedBase = File(work, "base.unsigned.apk")
+        val minSdk = rewrite(base, unsignedBase) { apk -> patcher.patch(apk, newPackage) }
+        val unsignedSplits = splits.mapIndexed { i, split ->
+            File(work, "split$i.unsigned.apk").also { out ->
+                rewrite(split, out) { apk -> patcher.patchSplit(apk, newPackage) }
+            }
+        }
+
+        log("Signing")
+        val signer = KeystoreSigner()
+        return (listOf(unsignedBase) + unsignedSplits).map { unsigned ->
+            File(work, unsigned.name.replace(".unsigned", "")).also { signed ->
+                signer.sign(unsigned, signed, minSdk)
+                unsigned.delete()
+            }
+        }
+    }
+
+    /** Applies [edit], writes an unsigned APK and returns its minSdk. */
+    private fun rewrite(input: File, output: File, edit: (ApkModule) -> Unit): Int =
+        ApkModule.loadApkFile(input).use { apk ->
             apk.setApkSignatureBlock(null)
             apk.zipEntryMap.removeIf(V1_SIGNATURE_FILES)
-            ManifestPatcher(log).patch(apk, carPackageName(app.packageName))
-            minSdk = apk.androidManifest.minSdkVersion ?: 1
-
-            log("Writing patched APK")
-            val writer = apk.createApkFileWriter(unsigned)
+            edit(apk)
+            val writer = apk.createApkFileWriter(output)
             writer.zipAligner = ZipAligner().apply {
                 setDefaultAlignment(4)
                 // Uncompressed native libs must be page-aligned; 16 KB covers 4 KB devices too
                 setFileAlignment(ZipAligner.PREDICATE_NATIVE_LIBS, 16 * 1024)
             }
             writer.write()
+            apk.androidManifest.minSdkVersion ?: 1
         }
-
-        log("Signing")
-        KeystoreSigner().sign(unsigned, signed, minSdk)
-        unsigned.delete()
-        return signed
-    }
 
     companion object {
         private val V1_SIGNATURE_FILES =
