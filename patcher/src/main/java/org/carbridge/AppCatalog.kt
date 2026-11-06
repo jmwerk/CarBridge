@@ -18,6 +18,8 @@ data class SourceApp(
     val info: ApplicationInfo,
     val icon: ImageBitmap,
     val sizeBytes: Long,
+    /** The app already ships its own Android Auto experience (media, messaging or templates). */
+    val hasAndroidAuto: Boolean,
 )
 
 /** An installed car copy, with the original it came from when that is still installed. */
@@ -49,7 +51,12 @@ object AppCatalog {
             .filter { it.flags and ApplicationInfo.FLAG_SYSTEM == 0 && it.packageName != context.packageName }
 
         val (copyInfos, sourceInfos) = launchable.partition { it.packageName.endsWith(CAR_SUFFIX) }
-        val sources = sourceInfos.associate { it.packageName to it.toSource(pm) }
+        // Launcher query results don't carry meta-data, so read it once for all apps
+        val autoApps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
+            .filter { it.metaData?.containsKey(CAR_APP_META) == true }
+            .map { it.packageName }
+            .toSet()
+        val sources = sourceInfos.associate { it.packageName to it.toSource(pm, it.packageName in autoApps) }
 
         val copies = copyInfos.map { info ->
             val originalPkg = info.packageName.removeSuffix(CAR_SUFFIX)
@@ -70,11 +77,12 @@ object AppCatalog {
         return Catalog(copies, available)
     }
 
-    private fun ApplicationInfo.toSource(pm: PackageManager) = SourceApp(
+    private fun ApplicationInfo.toSource(pm: PackageManager, hasAndroidAuto: Boolean) = SourceApp(
         label = loadLabel(pm).toString(),
         info = this,
         icon = pm.getApplicationIcon(this).toImageBitmap(),
         sizeBytes = (listOf(sourceDir) + splitSourceDirs.orEmpty()).sumOf { File(it).length() },
+        hasAndroidAuto = hasAndroidAuto,
     )
 
     private fun versionOf(pm: PackageManager, pkg: String): Version? =
@@ -88,4 +96,5 @@ object AppCatalog {
     }
 
     private val CAR_SUFFIX = PatchPipeline.carPackageName("")
+    private const val CAR_APP_META = "com.google.android.gms.car.application"
 }

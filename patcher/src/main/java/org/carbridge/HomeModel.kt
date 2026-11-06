@@ -42,6 +42,8 @@ class HomeModel(app: Application) : AndroidViewModel(app) {
         private set
     var setup by mutableStateOf(readSetup())
         private set
+    var showAutoApps by mutableStateOf(prefs.getBoolean("show_auto_apps", false))
+        private set
 
     private val _messages = Channel<UserMessage>(Channel.BUFFERED)
     val messages = _messages.receiveAsFlow()
@@ -73,6 +75,11 @@ class HomeModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             catalog = withContext(Dispatchers.IO) { AppCatalog.load(getApplication()) }
         }
+    }
+
+    fun toggleAutoApps() {
+        showAutoApps = !showAutoApps
+        prefs.edit().putBoolean("show_auto_apps", showAutoApps).apply()
     }
 
     fun markDeveloperMode() = mark("developer_mode")

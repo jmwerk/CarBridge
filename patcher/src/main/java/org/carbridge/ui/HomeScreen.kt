@@ -180,10 +180,19 @@ fun HomeScreen(model: HomeModel, actions: HomeActions) {
                     if (catalog.available.size > 6) {
                         item("search") { SearchField(query) { query = it } }
                     }
-                    val shown = catalog.available.filter { query.isBlank() || it.label.contains(query.trim(), ignoreCase = true) }
+                    val search = query.trim()
+                    // A search is explicit, so it also finds apps that already have Android Auto
+                    val shown = catalog.available.filter {
+                        if (search.isNotEmpty()) it.label.contains(search, ignoreCase = true)
+                        else model.showAutoApps || !it.hasAndroidAuto
+                    }
+                    val autoCount = catalog.available.count { it.hasAndroidAuto }
+                    if (search.isEmpty() && autoCount > 0) {
+                        item("auto-toggle") { AutoAppsToggle(autoCount, model.showAutoApps, model::toggleAutoApps) }
+                    }
                     if (shown.isEmpty()) {
                         item("add-empty") {
-                            Hint(if (query.isBlank()) "Every app you can add is already on your car." else "No apps match “${query.trim()}”.")
+                            Hint(if (search.isEmpty()) "Every app you can add is already on your car." else "No apps match “$search”.")
                         }
                     }
                     items(shown, key = { "src:" + it.info.packageName }) { app ->
@@ -519,6 +528,23 @@ private fun SearchField(query: String, onChange: (String) -> Unit) {
 }
 
 @Composable
+private fun AutoAppsToggle(count: Int, showing: Boolean, onToggle: () -> Unit) {
+    val apps = if (count == 1) "1 app" else "$count apps"
+    Row(
+        Modifier.fillMaxWidth().padding(start = Gutter, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            if (showing) "Showing $apps that already work in Android Auto." else "$apps already work in Android Auto.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = onToggle) { Text(if (showing) "Hide them" else "Show them") }
+    }
+}
+
+@Composable
 private fun SourceRow(app: SourceApp, enabled: Boolean, onAdd: () -> Unit) {
     val context = LocalContext.current
     Row(
@@ -530,7 +556,10 @@ private fun SourceRow(app: SourceApp, enabled: Boolean, onAdd: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Text(app.label, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                Formatter.formatShortFileSize(context, app.sizeBytes),
+                listOfNotNull(
+                    "Has Android Auto".takeIf { app.hasAndroidAuto },
+                    Formatter.formatShortFileSize(context, app.sizeBytes),
+                ).joinToString(" · "),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
