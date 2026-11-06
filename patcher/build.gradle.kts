@@ -25,6 +25,16 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Local testing only; a real release needs its own signing key
+            signingConfig = signingConfigs.getByName("debug")
+        }
+    }
+
     packaging {
         resources.excludes += setOf("META-INF/LICENSE*", "META-INF/NOTICE*")
     }

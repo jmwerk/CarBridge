@@ -113,6 +113,9 @@ An on-device app that does what `scripts/patch-apk.sh` does, without a computer.
 JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew :patcher:installDebug
 ```
 
+The release build (`:patcher:assembleRelease`) runs R8 and is about 4.3 MB instead of 31 MB.
+apksig's ASN.1 models need the keep rules in `patcher/proguard-rules.pro`, or v1 signing fails.
+
 Open CarBridge, tap **Patch** next to an app, and confirm Android's install prompt. The car copy
 installs as `<package>.car` next to the original. Then reconnect Android Auto.
 
@@ -147,5 +150,9 @@ JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradle
   file-provider features may break.
 - The signing key dies with CarBridge's data. After an uninstall or a data clear, existing car
   copies can't be updated in place.
-- The debug APK is 31 MB, mostly ARSCLib's bundled framework resources. Needs R8/shrinking.
-- No `LICENSE` file yet; the plan is GPL-3.0.
+- The release build is signed with the debug key for local testing; a public release needs its
+  own signing key.
+
+## License
+
+GPL-3.0. See [LICENSE](LICENSE).
