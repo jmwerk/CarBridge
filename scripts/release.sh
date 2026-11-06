@@ -14,6 +14,14 @@ tag="v$version"
 [[ -z "$(git status --porcelain)" ]] || { echo "Working tree not clean" >&2; exit 1; }
 git rev-parse -q --verify "refs/tags/$tag" >/dev/null && { echo "$tag already exists; bump versionName/versionCode" >&2; exit 1; }
 
+# With the signing secrets in the repo, the Release workflow builds and publishes from the tag
+if gh secret list 2>/dev/null | grep -q '^CARBRIDGE_KEYSTORE'; then
+  git tag -a "$tag" -m "CarBridge $version"
+  git push origin HEAD "$tag"
+  echo "Pushed $tag; GitHub Actions is building the release: gh run watch"
+  exit 0
+fi
+
 ./gradlew -q :patcher:assembleRelease
 apk="patcher/build/outputs/apk/release/patcher-release.apk"
 
