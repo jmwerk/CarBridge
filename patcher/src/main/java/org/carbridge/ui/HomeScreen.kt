@@ -90,6 +90,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.carbridge.CarCopy
+import org.carbridge.Caution
 import org.carbridge.HomeModel
 import org.carbridge.Job
 import org.carbridge.JobStep
@@ -105,6 +106,7 @@ class HomeActions(
     val markUnknownSources: () -> Unit,
     val add: (SourceApp) -> Unit,
     val update: (CarCopy) -> Unit,
+    val openMorphe: () -> Unit,
     val setFillScreen: (CarCopy, Boolean) -> Unit,
     val remove: (CarCopy) -> Unit,
 )
@@ -121,6 +123,7 @@ fun HomeScreen(model: HomeModel, actions: HomeActions) {
     var showAbout by rememberSaveable { mutableStateOf(false) }
     var showSetup by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
+    var cautionFor by remember { mutableStateOf<SourceApp?>(null) }
 
     LaunchedEffect(model) {
         model.messages.collect { message ->
@@ -203,7 +206,11 @@ fun HomeScreen(model: HomeModel, actions: HomeActions) {
                         }
                     }
                     items(shown, key = { "src:" + it.info.packageName }) { app ->
-                        SourceRow(app, enabled = !busy, onAdd = { actions.add(app) })
+                        SourceRow(
+                            app,
+                            enabled = !busy,
+                            onAdd = { if (app.caution != null) cautionFor = app else actions.add(app) },
+                        )
                     }
                 }
 
@@ -218,6 +225,14 @@ fun HomeScreen(model: HomeModel, actions: HomeActions) {
         }
     }
 
+    cautionFor?.let { app ->
+        CautionDialog(
+            app,
+            onDismiss = { cautionFor = null },
+            onAddAnyway = { cautionFor = null; actions.add(app) },
+            onOpenMorphe = { cautionFor = null; actions.openMorphe() },
+        )
+    }
     if (showAbout) {
         ModalBottomSheet(onDismissRequest = { showAbout = false }) { About() }
     }
@@ -577,6 +592,11 @@ private fun SourceRow(app: SourceApp, enabled: Boolean, onAdd: () -> Unit) {
             Text(app.label, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 listOfNotNull(
+                    when (app.caution) {
+                        Caution.LicenseCheck -> "Copy protected"
+                        Caution.Morphe -> "Patched with Morphe"
+                        null -> null
+                    },
                     "Has Android Auto".takeIf { app.hasAndroidAuto },
                     Formatter.formatShortFileSize(context, app.sizeBytes),
                 ).joinToString(" · "),
@@ -590,6 +610,37 @@ private fun SourceRow(app: SourceApp, enabled: Boolean, onAdd: () -> Unit) {
             Spacer(Modifier.width(6.dp))
             Text("Add")
         }
+    }
+}
+
+@Composable
+private fun CautionDialog(app: SourceApp, onDismiss: () -> Unit, onAddAnyway: () -> Unit, onOpenMorphe: () -> Unit) {
+    when (app.caution) {
+        Caution.Morphe -> AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("Add ${app.label} in Morphe instead") },
+            text = {
+                Text(
+                    "${app.label} was patched with Morphe. Add the CarBridge Patches source in Morphe and " +
+                        "repatch there: you keep one app with your settings, and it avoids a branding error.",
+                )
+            },
+            confirmButton = { TextButton(onClick = onOpenMorphe) { Text("Open in Morphe") } },
+            dismissButton = { TextButton(onClick = onAddAnyway) { Text("Make a copy anyway") } },
+        )
+        Caution.LicenseCheck -> AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("${app.label} probably won't open") },
+            text = {
+                Text(
+                    "${app.label} uses Google Play's copy protection, which usually closes copies as soon " +
+                        "as they start. You can still try.",
+                )
+            },
+            confirmButton = { TextButton(onClick = onAddAnyway) { Text("Add anyway") } },
+            dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        )
+        null -> Unit
     }
 }
 

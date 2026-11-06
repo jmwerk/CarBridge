@@ -36,6 +36,7 @@ class MainActivity : ComponentActivity() {
             markUnknownSources = model::markUnknownSources,
             add = { model.add(it, update = false) },
             update = { copy -> copy.original?.let { model.add(it, update = true) } },
+            openMorphe = { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(MORPHE_SOURCE))) },
             setFillScreen = model::setFillScreen,
             remove = { copy -> startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:${copy.packageName}"))) },
         )
@@ -68,5 +69,6 @@ class MainActivity : ComponentActivity() {
 
     private companion object {
         const val ANDROID_AUTO = "com.google.android.projection.gearhead"
+        const val MORPHE_SOURCE = "https://morphe.software/add-source?github=jmwerk/carbridge-patches"
     }
 }

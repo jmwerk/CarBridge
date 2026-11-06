@@ -21,7 +21,17 @@ data class SourceApp(
     val sizeBytes: Long,
     /** The app already ships its own Android Auto experience (media, messaging or templates). */
     val hasAndroidAuto: Boolean,
+    val caution: Caution?,
 )
+
+/** Why a copy of this app may be the wrong choice; shown before patching. */
+enum class Caution {
+    /** Uses Play's integrity license check, which closes re-signed copies on launch. */
+    LicenseCheck,
+
+    /** Already patched by Morphe, where the CarBridge patch bundle does this better. */
+    Morphe,
+}
 
 /** An installed car copy, with the original it came from when that is still installed. */
 data class CarCopy(
@@ -60,7 +70,22 @@ object AppCatalog {
             .filter { it.metaData?.containsKey(CAR_APP_META) == true }
             .map { it.packageName }
             .toSet()
-        val sources = sourceInfos.associate { it.packageName to it.toSource(pm, it.packageName in autoApps) }
+        // CHECK_LICENSE alone is too common (ad SDKs, free apps) to predict a failure
+        val licensed = pm.getInstalledPackages(PackageManager.GET_PROVIDERS or PackageManager.GET_ACTIVITIES)
+            .filter { pkg ->
+                pkg.providers.orEmpty().any { it.name.startsWith(PAIRIP_PREFIX) } ||
+                    pkg.activities.orEmpty().any { it.name.startsWith(PAIRIP_PREFIX) }
+            }
+            .map { it.packageName }
+            .toSet()
+        val sources = sourceInfos.associate { info ->
+            val caution = when {
+                info.packageName.startsWith(MORPHE_PREFIX) -> Caution.Morphe
+                info.packageName in licensed -> Caution.LicenseCheck
+                else -> null
+            }
+            info.packageName to info.toSource(pm, info.packageName in autoApps, caution)
+        }
 
         val copies = copyInfos.map { info ->
             val originalPkg = info.packageName.removeSuffix(CAR_SUFFIX)
@@ -83,12 +108,13 @@ object AppCatalog {
         return Catalog(copies, available)
     }
 
-    private fun ApplicationInfo.toSource(pm: PackageManager, hasAndroidAuto: Boolean) = SourceApp(
+    private fun ApplicationInfo.toSource(pm: PackageManager, hasAndroidAuto: Boolean, caution: Caution?) = SourceApp(
         label = loadLabel(pm).toString(),
         info = this,
         icon = pm.getApplicationIcon(this).toImageBitmap(),
         sizeBytes = (listOf(sourceDir) + splitSourceDirs.orEmpty()).sumOf { File(it).length() },
         hasAndroidAuto = hasAndroidAuto,
+        caution = caution,
     )
 
     private fun locksPortrait(pm: PackageManager, pkg: String): Boolean =
@@ -114,5 +140,7 @@ object AppCatalog {
         ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT,
         ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT,
     )
+    private const val PAIRIP_PREFIX = "com.pairip.licensecheck."
+    private const val MORPHE_PREFIX = "app.morphe.android."
     private const val CAR_APP_META = "com.google.android.gms.car.application"
 }
