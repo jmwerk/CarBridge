@@ -241,7 +241,7 @@ private fun SignHeader(onAbout: () -> Unit) {
             .padding(start = Gutter, end = 4.dp, top = 12.dp, bottom = 28.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(ExitArrow, contentDescription = null, tint = signs.onGuide, modifier = Modifier.size(36.dp))
+            Icon(BridgeMark, contentDescription = null, tint = signs.onGuide, modifier = Modifier.size(40.dp))
             Spacer(Modifier.width(10.dp))
             Text(
                 "CarBridge",

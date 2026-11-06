@@ -1,11 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A guide-sign panel: inset white border with an exit arrow -->
+<!-- A guide-sign panel: inset white border around a suspension bridge -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
     <path android:strokeColor="#FFFFFF" android:strokeWidth="3"
         android:pathData="M39,31h30a8,8 0 0 1 8,8v30a8,8 0 0 1 -8,8h-30a8,8 0 0 1 -8,-8v-30a8,8 0 0 1 8,-8z" />
-    <path android:strokeColor="#FFFFFF" android:strokeWidth="7" android:strokeLineCap="round"
-        android:pathData="M44,66L60,50" />
-    <path android:fillColor="#FFFFFF" android:pathData="M51,41h17v17z" />
+    <group android:translateX="33" android:translateY="33" android:scaleX="1.75" android:scaleY="1.75">
+        <path android:strokeColor="#FFFFFF" android:strokeWidth="2.4" android:strokeLineCap="round"
+            android:pathData="M2,15H22M7,5V18.5M17,5V18.5" />
+        <path android:strokeColor="#FFFFFF" android:strokeWidth="1.5" android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:pathData="M7,5Q12,15 17,5M2,11.5Q5,9.5 7,5M17,5Q19,9.5 22,11.5" />
+        <path android:strokeColor="#FFFFFF" android:strokeWidth="1" android:strokeLineCap="round"
+            android:pathData="M9.5,10V15M12,10.6V15M14.5,10V15" />
+    </group>
 </vector>
