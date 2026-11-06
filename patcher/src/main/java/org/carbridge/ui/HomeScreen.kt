@@ -105,6 +105,7 @@ class HomeActions(
     val markUnknownSources: () -> Unit,
     val add: (SourceApp) -> Unit,
     val update: (CarCopy) -> Unit,
+    val setFillScreen: (CarCopy, Boolean) -> Unit,
     val remove: (CarCopy) -> Unit,
 )
 
@@ -171,7 +172,13 @@ fun HomeScreen(model: HomeModel, actions: HomeActions) {
                         Hint("Nothing yet. Add an app below, then reconnect your phone to Android Auto.")
                     }
                     else -> items(catalog.copies, key = { "car:" + it.packageName }) { copy ->
-                        CarSign(copy, busy, onUpdate = { actions.update(copy) }, onRemove = { actions.remove(copy) })
+                        CarSign(
+                            copy,
+                            busy,
+                            onUpdate = { actions.update(copy) },
+                            onRemove = { actions.remove(copy) },
+                            onFillScreen = { fill -> actions.setFillScreen(copy, fill) },
+                        )
                     }
                 }
 
@@ -421,7 +428,13 @@ private fun SetupDone(onShow: () -> Unit) {
 }
 
 @Composable
-private fun CarSign(copy: CarCopy, busy: Boolean, onUpdate: () -> Unit, onRemove: () -> Unit) {
+private fun CarSign(
+    copy: CarCopy,
+    busy: Boolean,
+    onUpdate: () -> Unit,
+    onRemove: () -> Unit,
+    onFillScreen: (Boolean) -> Unit,
+) {
     val signs = LocalSigns.current
     var menu by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().padding(horizontal = Gutter, vertical = 4.dp)) {
@@ -463,6 +476,13 @@ private fun CarSign(copy: CarCopy, busy: Boolean, onUpdate: () -> Unit, onRemove
                                 text = { Text("Update copy") },
                                 leadingIcon = { Icon(Icons.Rounded.Refresh, contentDescription = null) },
                                 onClick = { menu = false; onUpdate() },
+                            )
+                        }
+                        if (copy.original != null && copy.portraitLocked) {
+                            DropdownMenuItem(
+                                text = { Text(if (copy.fillsScreen) "Keep portrait layout" else "Fill the car screen") },
+                                leadingIcon = { Icon(LandscapeGlyph, contentDescription = null) },
+                                onClick = { menu = false; onFillScreen(!copy.fillsScreen) },
                             )
                         }
                         DropdownMenuItem(

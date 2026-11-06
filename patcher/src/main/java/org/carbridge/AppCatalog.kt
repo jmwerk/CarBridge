@@ -2,6 +2,7 @@ package org.carbridge
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -30,6 +31,9 @@ data class CarCopy(
     val original: SourceApp?,
     val version: Version?,
     val originalVersion: Version?,
+    /** The original locks some screens to portrait, so the layout choice matters. */
+    val portraitLocked: Boolean,
+    val fillsScreen: Boolean,
 ) {
     /** True when the original app has been updated past the version this copy was made from. */
     val outdated get() = version != null && originalVersion != null && originalVersion.code > version.code
@@ -42,7 +46,7 @@ data class Catalog(val copies: List<CarCopy>, val available: List<SourceApp>)
 object AppCatalog {
     private const val ICON_PX = 144
 
-    fun load(context: Context): Catalog {
+    fun load(context: Context, fillsScreen: (String) -> Boolean): Catalog {
         val pm = context.packageManager
         val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         val launchable = pm.queryIntentActivities(launcher, 0)
@@ -69,6 +73,8 @@ object AppCatalog {
                 original = original,
                 version = versionOf(pm, info.packageName),
                 originalVersion = original?.let { versionOf(pm, originalPkg) },
+                portraitLocked = original != null && locksPortrait(pm, originalPkg),
+                fillsScreen = fillsScreen(originalPkg),
             )
         }.sortedWith(compareBy({ !it.outdated }, { it.label.lowercase() }))
 
@@ -85,6 +91,12 @@ object AppCatalog {
         hasAndroidAuto = hasAndroidAuto,
     )
 
+    private fun locksPortrait(pm: PackageManager, pkg: String): Boolean =
+        runCatching {
+            pm.getPackageInfo(pkg, PackageManager.GET_ACTIVITIES).activities.orEmpty()
+                .any { it.screenOrientation in PORTRAIT_ORIENTATIONS }
+        }.getOrDefault(false)
+
     private fun versionOf(pm: PackageManager, pkg: String): Version? =
         runCatching { pm.getPackageInfo(pkg, 0).let { Version(it.longVersionCode, it.versionName) } }.getOrNull()
 
@@ -96,5 +108,11 @@ object AppCatalog {
     }
 
     private val CAR_SUFFIX = PatchPipeline.carPackageName("")
+    private val PORTRAIT_ORIENTATIONS = setOf(
+        ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+        ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT,
+        ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT,
+        ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT,
+    )
     private const val CAR_APP_META = "com.google.android.gms.car.application"
 }

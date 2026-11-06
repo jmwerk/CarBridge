@@ -73,13 +73,23 @@ class HomeModel(app: Application) : AndroidViewModel(app) {
     fun refresh() {
         setup = readSetup()
         viewModelScope.launch {
-            catalog = withContext(Dispatchers.IO) { AppCatalog.load(getApplication()) }
+            catalog = withContext(Dispatchers.IO) { AppCatalog.load(getApplication(), ::fillsScreen) }
         }
     }
 
     fun toggleAutoApps() {
         showAutoApps = !showAutoApps
         prefs.edit().putBoolean("show_auto_apps", showAutoApps).apply()
+    }
+
+    /** Copies drop portrait locks unless the user chose to keep an app's portrait layout. */
+    private fun fillsScreen(originalPackage: String) = !prefs.getBoolean("keep_portrait:$originalPackage", false)
+
+    /** Saves the layout choice and rebuilds the copy with it. */
+    fun setFillScreen(copy: CarCopy, fill: Boolean) {
+        val original = copy.original ?: return
+        prefs.edit().putBoolean("keep_portrait:${original.info.packageName}", !fill).apply()
+        add(original, update = true)
     }
 
     fun markDeveloperMode() = mark("developer_mode")
@@ -105,7 +115,7 @@ class HomeModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val apks = withContext(Dispatchers.IO) {
-                    PatchPipeline(context) { line -> onLog(line) }.patch(source.info)
+                    PatchPipeline(context) { line -> onLog(line) }.patch(source.info, fillsScreen(source.info.packageName))
                 }
                 job = job?.copy(step = JobStep.Confirm.ordinal)
                 withContext(Dispatchers.IO) { Installer.install(context, apks, carPackage) }

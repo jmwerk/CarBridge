@@ -29,3 +29,16 @@ val BridgeMark: ImageVector by lazy {
         }
     }.build()
 }
+
+/** A landscape screen outline for the "fill the car screen" layout option. */
+val LandscapeGlyph: ImageVector by lazy {
+    ImageVector.Builder("Landscape", 24.dp, 24.dp, 24f, 24f).apply {
+        path(stroke = SolidColor(Color.Black), strokeLineWidth = 2f, strokeLineJoin = StrokeJoin.Round) {
+            moveTo(5f, 6f); lineTo(19f, 6f)
+            quadTo(21f, 6f, 21f, 8f); lineTo(21f, 16f)
+            quadTo(21f, 18f, 19f, 18f); lineTo(5f, 18f)
+            quadTo(3f, 18f, 3f, 16f); lineTo(3f, 8f)
+            quadTo(3f, 6f, 5f, 6f); close()
+        }
+    }.build()
+}

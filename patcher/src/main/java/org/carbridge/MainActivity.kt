@@ -31,6 +31,7 @@ class MainActivity : ComponentActivity() {
             markUnknownSources = model::markUnknownSources,
             add = { model.add(it, update = false) },
             update = { copy -> copy.original?.let { model.add(it, update = true) } },
+            setFillScreen = model::setFillScreen,
             remove = { copy -> startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:${copy.packageName}"))) },
         )
         setContent {

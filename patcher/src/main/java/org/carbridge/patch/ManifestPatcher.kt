@@ -18,13 +18,15 @@ class ManifestPatcher(private val log: (String) -> Unit) {
     /** How the car copy presents itself; icon layers are PNGs for an adaptive icon. */
     class Branding(val label: String, val iconBackground: ByteArray?, val iconForeground: ByteArray?)
 
-    fun patch(apk: ApkModule, newPackage: String?, branding: Branding? = null) {
+    /** [fillScreen] drops portrait locks so the copy can use the whole landscape car display. */
+    fun patch(apk: ApkModule, newPackage: String?, branding: Branding? = null, fillScreen: Boolean = false) {
         val manifest = apk.androidManifest ?: error("APK has no AndroidManifest.xml")
         val app = manifest.applicationElement ?: error("manifest has no <application>")
 
         addCarEntries(apk, manifest, app)
         stripTemplateServices(app)
         if (branding != null) applyBranding(apk, app, branding)
+        if (fillScreen) unlockPortrait(app)
         if (newPackage != null) renamePackage(apk, manifest, newPackage)
         apk.refreshManifest()
         apk.refreshTable()
@@ -139,6 +141,18 @@ class ManifestPatcher(private val log: (String) -> Unit) {
         (app.listElements("activity") + app.listElements("activity-alias"))
             .filter { a -> a.listElements("intent-filter").any(::isLauncherFilter) }
 
+    private fun unlockPortrait(app: ResXmlElement) {
+        var unlocked = 0
+        for (activity in app.listElements("activity")) {
+            val attr = activity.searchAttributeByResourceId(ID_SCREEN_ORIENTATION) ?: continue
+            if (attr.valueType == ValueType.DEC && attr.data in PORTRAIT_ORIENTATIONS) {
+                activity.removeAttribute(attr)
+                unlocked++
+            }
+        }
+        if (unlocked > 0) log("Unlocked portrait on $unlocked activities")
+    }
+
     private fun stripTemplateServices(app: ResXmlElement) {
         for (service in app.listElements("service")) {
             for (filter in service.listElements("intent-filter")) {
@@ -241,6 +255,7 @@ class ManifestPatcher(private val log: (String) -> Unit) {
         private const val ID_READ_PERMISSION = 0x01010007
         private const val ID_WRITE_PERMISSION = 0x01010008
         private const val ID_AUTHORITIES = 0x01010018
+        private const val ID_SCREEN_ORIENTATION = 0x0101001e
         private const val ID_VALUE = 0x01010024
         private const val ID_RESOURCE = 0x01010025
         private const val ID_TARGET_ACTIVITY = 0x01010202
@@ -254,6 +269,9 @@ class ManifestPatcher(private val log: (String) -> Unit) {
         private const val ANDROID_NS = "http://schemas.android.com/apk/res/android"
         private const val CAR_APP_META = "com.google.android.gms.car.application"
         private const val DESCRIPTOR_NAME = "carbridge_automotive_app_desc"
+
+        // ActivityInfo.SCREEN_ORIENTATION_{PORTRAIT, SENSOR_PORTRAIT, REVERSE_PORTRAIT, USER_PORTRAIT}
+        private val PORTRAIT_ORIENTATIONS = setOf(1, 7, 9, 12)
 
         private val CLASS_NAME_ATTRS = listOf(ID_NAME, ID_TARGET_ACTIVITY, ID_BACKUP_AGENT)
         private val PERMISSION_ATTRS = listOf(ID_NAME, ID_PERMISSION, ID_READ_PERMISSION, ID_WRITE_PERMISSION)
