@@ -146,8 +146,11 @@ JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradle
 
 - Apps protected by Play Integrity, signature checks or license verification will refuse to run
   after re-signing. Nothing can be done about that from the outside.
-- Authorities hardcoded in an app's code still point at the original package. Sharing or
-  file-provider features may break.
+- Authorities hardcoded in an app's code still point at the original package. Measured on
+  2026-11-06: Firefox 159 has none (it builds them from the runtime package name); VLC 3.7.1 has
+  one (`org.videolan.vlc.thumbprovider`), so thumbnails in the copy may come from, or miss, the
+  original. Fixing this means rewriting dex strings, and ARSCLib's dex module calls itself
+  experimental, so it's deferred until a real app needs it.
 - The signing key dies with CarBridge's data. After an uninstall or a data clear, existing car
   copies can't be updated in place.
 - The release build is signed with the debug key for local testing; a public release needs its
