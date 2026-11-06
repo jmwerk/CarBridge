@@ -76,5 +76,7 @@ dependencies {
 tasks.withType<Test>().configureEach {
     // Optional real-APK fixture: ./gradlew :patcher:testDebugUnitTest -PpatchFixture=/path/app.apk
     project.findProperty("patchFixture")?.let { systemProperty("patchFixture", it) }
+    // Mirror a phone's heap cap to catch out-of-memory patches: -PpatchHeap=256m
+    project.findProperty("patchHeap")?.let { maxHeapSize = it.toString() }
     systemProperty("patchOut", layout.buildDirectory.file("patch-test/out.apk").get().asFile.path)
 }
