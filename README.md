@@ -9,6 +9,16 @@ comes from AAAnything.
 > VLC 3.7.1, Firefox 159.0.1 (3 split APKs), GitHub 1.282.0, Offline Games (Unity, 2 split APKs)
 > and Morphe YouTube 21.03.36.
 
+## Install
+
+Get it with [Obtainium](https://github.com/ImranR98/Obtainium), which installs and updates
+CarBridge from this repo's GitHub releases:
+**[Add to Obtainium](https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/jmwerk/CarBridge)**.
+Or download the APK from [Releases](https://github.com/jmwerk/CarBridge/releases).
+
+Release APKs are signed with certificate SHA-256
+`a4:68:93:60:a9:1a:49:b1:6f:a7:b1:50:dc:fc:6e:2b:89:21:1a:cd:b9:63:b5:5f:1b:15:70:4a:da:43:cc:7f`.
+
 ## Requirements
 
 - Android 15+ phone with USB debugging on
@@ -116,6 +126,9 @@ The release key is `~/.android/carbridge-release.jks` (RSA-4096, alias `carbridg
 certificate SHA-256 `a4:68:93:60:a9:1a:49:b1:6f:a7:b1:50:dc:fc:6e:2b:89:21:1a:cd:b9:63:b5:5f:1b:15:70:4a:da:43:cc:7f`).
 Its password is in `~/.gradle/gradle.properties` as `CARBRIDGE_*`; neither is in the repo.
 Without them, `assembleRelease` falls back to the debug key.
+
+Publish a release with `scripts/release.sh` after bumping `versionCode` and `versionName`. It
+refuses to upload an APK that isn't signed with the release key.
 
 **Back up both files somewhere safe.** If the key is lost, CarBridge can't be updated in place.
 Users would have to uninstall it, which also deletes the on-device key it uses for car copies.
