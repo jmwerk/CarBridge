@@ -130,6 +130,10 @@ class ManifestPatcher(private val log: (String) -> Unit) {
             attr.stringOrNull()?.let { attr.setValueAsString(renameValue(it, old, newPackage)) }
         }
 
+        // getIdentifier(name, type, getPackageName()) resolves against the table's package name
+        val table = if (apk.hasTableBlock()) apk.getTableBlock(false) else null
+        table?.listPackages()?.filter { it.name == old }?.forEach { it.name = newPackage }
+
         manifest.packageName = newPackage
         log("Renamed package $old -> $newPackage")
     }
