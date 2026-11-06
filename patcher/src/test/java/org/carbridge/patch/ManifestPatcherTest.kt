@@ -31,7 +31,9 @@ class ManifestPatcherTest {
 
         val newPackage = ApkModule.loadApkFile(base).use { it.androidManifest.packageName + ".car" }
         ApkModule.loadApkFile(base).use { apk ->
-            patcher.patch(apk, newPackage)
+            // Placeholder layers: aapt2 checks the resource wiring, not the PNG pixels
+            val png = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47)
+            patcher.patch(apk, newPackage, ManifestPatcher.Branding("Fixture (Car)", png, png))
             apk.writeApk(File(outDir, "base.apk"))
         }
         for (split in splits) {

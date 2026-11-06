@@ -20,7 +20,8 @@ class PatchPipeline(private val context: Context, private val log: (String) -> U
 
         val patcher = ManifestPatcher(log)
         val unsignedBase = File(work, "base.unsigned.apk")
-        val minSdk = rewrite(base, unsignedBase) { apk -> patcher.patch(apk, newPackage) }
+        val branding = IconBadger.branding(context, app)
+        val minSdk = rewrite(base, unsignedBase) { apk -> patcher.patch(apk, newPackage, branding) }
         val unsignedSplits = splits.mapIndexed { i, split ->
             File(work, "split$i.unsigned.apk").also { out ->
                 rewrite(split, out) { apk -> patcher.patchSplit(apk, newPackage) }
@@ -56,6 +57,8 @@ class PatchPipeline(private val context: Context, private val log: (String) -> U
     companion object {
         private val V1_SIGNATURE_FILES =
             Regex("META-INF/(MANIFEST\\.MF|[^/]+\\.(SF|RSA|DSA|EC))", RegexOption.IGNORE_CASE).toPattern()
+
+        const val CAR_LABEL_SUFFIX = " (Car)"
 
         fun carPackageName(original: String) = "$original.car"
     }

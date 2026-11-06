@@ -15,12 +15,16 @@ import com.reandroid.arsc.value.ValueType
  */
 class ManifestPatcher(private val log: (String) -> Unit) {
 
-    fun patch(apk: ApkModule, newPackage: String?) {
+    /** How the car copy presents itself; icon layers are PNGs for an adaptive icon. */
+    class Branding(val label: String, val iconBackground: ByteArray?, val iconForeground: ByteArray?)
+
+    fun patch(apk: ApkModule, newPackage: String?, branding: Branding? = null) {
         val manifest = apk.androidManifest ?: error("APK has no AndroidManifest.xml")
         val app = manifest.applicationElement ?: error("manifest has no <application>")
 
         addCarEntries(apk, manifest, app)
         stripTemplateServices(app)
+        if (branding != null) applyBranding(apk, app, branding)
         if (newPackage != null) renamePackage(apk, manifest, newPackage)
         apk.refreshManifest()
         apk.refreshTable()
@@ -79,6 +83,61 @@ class ManifestPatcher(private val log: (String) -> Unit) {
         apk.add(ByteInputSource(doc.bytes, path))
         return entry.resourceId
     }
+
+    /** Gives the copy its own label and icon so it can't be mistaken for the original. */
+    private fun applyBranding(apk: ApkModule, app: ResXmlElement, branding: Branding) {
+        val launchers = launcherActivities(app)
+        for (el in listOf(app) + launchers) {
+            // Activities without a label inherit the application's
+            if (el === app || el.searchAttributeByResourceId(ID_LABEL) != null) {
+                el.getOrCreateAndroidAttribute("label", ID_LABEL).setValueAsString(branding.label)
+            }
+        }
+        log("Label: ${branding.label}")
+
+        val bg = branding.iconBackground ?: return
+        val fg = branding.iconForeground ?: return
+        val pkg = apk.getTableBlock(false)?.pickOne() ?: error("APK has no resources.arsc")
+        val bgId = addFile(apk, pkg, "nodpi", "drawable", "carbridge_icon_bg", "png", bg)
+        val fgId = addFile(apk, pkg, "nodpi", "drawable", "carbridge_icon_fg", "png", fg)
+
+        val doc = ResXmlDocument()
+        val root = doc.newElement("adaptive-icon")
+        root.newNamespace(ANDROID_NS, "android")
+        root.newElement("background").getOrCreateAndroidAttribute("drawable", ID_DRAWABLE).setValueAsResourceId(bgId)
+        root.newElement("foreground").getOrCreateAndroidAttribute("drawable", ID_DRAWABLE).setValueAsResourceId(fgId)
+        doc.refreshFull()
+        val iconId = addFile(apk, pkg, "anydpi-v26", "mipmap", "carbridge_icon", "xml", doc.bytes)
+
+        for (el in listOf(app) + launchers) {
+            for ((name, id) in listOf("icon" to ID_ICON, "roundIcon" to ID_ROUND_ICON)) {
+                if (el === app || el.searchAttributeByResourceId(id) != null) {
+                    el.getOrCreateAndroidAttribute(name, id).setValueAsResourceId(iconId)
+                }
+            }
+        }
+        log("Icon: badged")
+    }
+
+    private fun addFile(
+        apk: ApkModule,
+        pkg: com.reandroid.arsc.chunk.PackageBlock,
+        qualifiers: String,
+        type: String,
+        name: String,
+        ext: String,
+        bytes: ByteArray,
+    ): Int {
+        val path = "res/$type-$qualifiers/$name.$ext"
+        val entry = pkg.getOrCreate(qualifiers, type, name)
+        entry.setValueAsString(path)
+        apk.add(ByteInputSource(bytes, path))
+        return entry.resourceId
+    }
+
+    private fun launcherActivities(app: ResXmlElement) =
+        (app.listElements("activity") + app.listElements("activity-alias"))
+            .filter { a -> a.listElements("intent-filter").any(::isLauncherFilter) }
 
     private fun stripTemplateServices(app: ResXmlElement) {
         for (service in app.listElements("service")) {
@@ -174,6 +233,8 @@ class ManifestPatcher(private val log: (String) -> Unit) {
 
     companion object {
         // android.R.attr ids, verified against android-36 android.jar
+        private const val ID_LABEL = 0x01010001
+        private const val ID_ICON = 0x01010002
         private const val ID_NAME = 0x01010003
         private const val ID_SHARED_USER_ID = 0x0101000b
         private const val ID_PERMISSION = 0x01010006
@@ -185,9 +246,12 @@ class ManifestPatcher(private val log: (String) -> Unit) {
         private const val ID_TARGET_ACTIVITY = 0x01010202
         private const val ID_BACKUP_AGENT = 0x0101027f
         private const val ID_RESIZEABLE = 0x010104f6
+        private const val ID_DRAWABLE = 0x01010199
+        private const val ID_ROUND_ICON = 0x0101052c
         private const val ID_APP_CATEGORY = 0x01010545
         private const val APP_CATEGORY_GAME = 0
 
+        private const val ANDROID_NS = "http://schemas.android.com/apk/res/android"
         private const val CAR_APP_META = "com.google.android.gms.car.application"
         private const val DESCRIPTOR_NAME = "carbridge_automotive_app_desc"
 

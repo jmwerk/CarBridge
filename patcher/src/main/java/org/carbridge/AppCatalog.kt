@@ -49,7 +49,8 @@ object AppCatalog {
             val originalPkg = info.packageName.removeSuffix(CAR_SUFFIX)
             val original = sources[originalPkg]
             CarCopy(
-                label = info.loadLabel(pm).toString(),
+                // The sign already says it is on the car
+                label = info.loadLabel(pm).toString().removeSuffix(PatchPipeline.CAR_LABEL_SUFFIX),
                 packageName = info.packageName,
                 icon = pm.getApplicationIcon(info).toImageBitmap(),
                 original = original,
