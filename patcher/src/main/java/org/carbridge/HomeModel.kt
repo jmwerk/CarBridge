@@ -49,12 +49,20 @@ class HomeModel(app: Application) : AndroidViewModel(app) {
     val messages = _messages.receiveAsFlow()
     private val log = mutableListOf<String>()
 
+    /** Fires once, after the first copy installs, so the permission ask has an obvious reason. */
+    private val _notificationPrompt = Channel<Unit>(Channel.CONFLATED)
+    val notificationPrompt = _notificationPrompt.receiveAsFlow()
+
     init {
         viewModelScope.launch {
             Installer.events.collect { result ->
                 val current = job
                 if (current != null && (result.packageName ?: current.packageName) == current.packageName) {
                     job = null
+                    if (result.success && !prefs.getBoolean("asked_notifications", false)) {
+                        prefs.edit().putBoolean("asked_notifications", true).apply()
+                        _notificationPrompt.send(Unit)
+                    }
                     _messages.send(
                         when {
                             result.success -> UserMessage(

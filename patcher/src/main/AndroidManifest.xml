@@ -8,6 +8,9 @@
         tools:ignore="QueryAllPackagesPermission" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+    <!-- Out-of-date car copy notices; the periodic check survives reboots -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- largeHeap: ARSCLib holds a whole APK's tables in memory; YouTube needs over 100 MB -->
     <application
@@ -29,5 +32,10 @@
         <receiver
             android:name=".InstallStatusReceiver"
             android:exported="false" />
+
+        <service
+            android:name=".UpdateCheckService"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
     </application>
 </manifest>

@@ -1,5 +1,6 @@
 package org.carbridge
 
+import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.graphics.Color
@@ -10,6 +11,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import androidx.lifecycle.ViewModelProvider
 import org.carbridge.ui.CarBridgeTheme
 import org.carbridge.ui.HomeActions
@@ -17,6 +21,7 @@ import org.carbridge.ui.HomeScreen
 
 class MainActivity : ComponentActivity() {
     private val model by lazy { ViewModelProvider(this)[HomeModel::class.java] }
+    private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // The header is always guide-sign green, so status bar icons stay light in both themes
@@ -34,6 +39,10 @@ class MainActivity : ComponentActivity() {
             setFillScreen = model::setFillScreen,
             remove = { copy -> startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:${copy.packageName}"))) },
         )
+        UpdateCheck.schedule(this)
+        lifecycleScope.launch {
+            model.notificationPrompt.collect { askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS) }
+        }
         setContent {
             CarBridgeTheme {
                 HomeScreen(model, actions)
@@ -45,6 +54,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // Settings, uninstall and install prompts all return here
         model.refresh()
+        UpdateCheck.dismissIfResolved(this)
     }
 
     private fun openAndroidAuto() {
