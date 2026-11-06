@@ -25,13 +25,26 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    // Release key lives outside the repo; set CARBRIDGE_* in ~/.gradle/gradle.properties
+    val releaseStore = providers.gradleProperty("CARBRIDGE_STORE_FILE").orNull
+    signingConfigs {
+        if (releaseStore != null) {
+            create("release") {
+                storeFile = file(releaseStore)
+                storePassword = providers.gradleProperty("CARBRIDGE_STORE_PASSWORD").get()
+                keyAlias = providers.gradleProperty("CARBRIDGE_KEY_ALIAS").get()
+                keyPassword = providers.gradleProperty("CARBRIDGE_KEY_PASSWORD").get()
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Local testing only; a real release needs its own signing key
-            signingConfig = signingConfigs.getByName("debug")
+            // Without the release key (e.g. a fresh clone), fall back to debug signing for local tests
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
 
