@@ -48,6 +48,11 @@ class HomeModel(app: Application) : AndroidViewModel(app) {
     private val _messages = Channel<UserMessage>(Channel.BUFFERED)
     val messages = _messages.receiveAsFlow()
     private val log = mutableListOf<String>()
+    private val updateQueue = ArrayDeque<SourceApp>()
+
+    /** Copies still waiting in an Update all run, including the one being built. */
+    var queued by mutableStateOf(0)
+        private set
 
     /** Fires once, after the first copy installs, so the permission ask has an obvious reason. */
     private val _notificationPrompt = Channel<Unit>(Channel.CONFLATED)
@@ -74,8 +79,25 @@ class HomeModel(app: Application) : AndroidViewModel(app) {
                     )
                 }
                 refresh()
+                if (job == null) nextQueued(continueRun = result.success)
             }
         }
+    }
+
+    /** Rebuilds every outdated copy in turn; each still needs its own install confirmation. */
+    fun updateAll(copies: List<CarCopy>) {
+        if (job != null) return
+        updateQueue.clear()
+        updateQueue.addAll(copies.filter { it.outdated }.mapNotNull { it.original })
+        nextQueued(continueRun = true)
+    }
+
+    private fun nextQueued(continueRun: Boolean) {
+        // A cancelled or failed install stops the run, so the user isn't trapped in prompts
+        if (!continueRun) updateQueue.clear()
+        val next = updateQueue.removeFirstOrNull()
+        queued = if (next == null) 0 else updateQueue.size + 1
+        next?.let { add(it, update = true) }
     }
 
     fun refresh() {
@@ -131,6 +153,7 @@ class HomeModel(app: Application) : AndroidViewModel(app) {
                 // Throwable: apksig/ARSCLib can throw Errors (e.g. missing JDK classes on Android)
                 Log.e(TAG, "patch failed", e)
                 job = null
+                nextQueued(continueRun = false)
                 _messages.send(UserMessage("Couldn't add ${source.label}.", details("${e.javaClass.simpleName}: ${e.message}")))
             }
         }

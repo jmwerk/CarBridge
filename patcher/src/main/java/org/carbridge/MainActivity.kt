@@ -36,6 +36,7 @@ class MainActivity : ComponentActivity() {
             markUnknownSources = model::markUnknownSources,
             add = { model.add(it, update = false) },
             update = { copy -> copy.original?.let { model.add(it, update = true) } },
+            updateAll = model::updateAll,
             openMorphe = { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(MORPHE_SOURCE))) },
             setFillScreen = model::setFillScreen,
             remove = { copy -> startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:${copy.packageName}"))) },

@@ -106,6 +106,7 @@ class HomeActions(
     val markUnknownSources: () -> Unit,
     val add: (SourceApp) -> Unit,
     val update: (CarCopy) -> Unit,
+    val updateAll: (List<CarCopy>) -> Unit,
     val openMorphe: () -> Unit,
     val setFillScreen: (CarCopy, Boolean) -> Unit,
     val remove: (CarCopy) -> Unit,
@@ -146,7 +147,7 @@ fun HomeScreen(model: HomeModel, actions: HomeActions) {
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
             AnimatedVisibility(job != null, enter = slideInVertically { it }, exit = slideOutVertically { it }) {
-                job?.let { JobBar(it) }
+                job?.let { JobBar(it, waiting = (model.queued - 1).coerceAtLeast(0)) }
             }
         },
         contentWindowInsets = WindowInsets(0),
@@ -174,7 +175,12 @@ fun HomeScreen(model: HomeModel, actions: HomeActions) {
                     catalog.copies.isEmpty() -> item("car-empty") {
                         Hint("Nothing yet. Add an app below, then reconnect your phone to Android Auto.")
                     }
-                    else -> items(catalog.copies, key = { "car:" + it.packageName }) { copy ->
+                    else -> {
+                        val outdated = catalog.copies.filter { it.outdated && it.original != null }
+                        if (outdated.size > 1) {
+                            item("update-all") { UpdateAllRow(outdated.size, enabled = !busy) { actions.updateAll(outdated) } }
+                        }
+                        items(catalog.copies, key = { "car:" + it.packageName }) { copy ->
                         CarSign(
                             copy,
                             busy,
@@ -182,6 +188,7 @@ fun HomeScreen(model: HomeModel, actions: HomeActions) {
                             onRemove = { actions.remove(copy) },
                             onFillScreen = { fill -> actions.setFillScreen(copy, fill) },
                         )
+                    }
                     }
                 }
 
@@ -614,6 +621,22 @@ private fun SourceRow(app: SourceApp, enabled: Boolean, onAdd: () -> Unit) {
 }
 
 @Composable
+private fun UpdateAllRow(count: Int, enabled: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = Gutter, end = Gutter, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "$count copies are out of date",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        FilledTonalButton(onClick = onClick, enabled = enabled) { Text("Update all") }
+    }
+}
+
+@Composable
 private fun CautionDialog(app: SourceApp, onDismiss: () -> Unit, onAddAnyway: () -> Unit, onOpenMorphe: () -> Unit) {
     when (app.caution) {
         Caution.Morphe -> AlertDialog(
@@ -657,7 +680,7 @@ private fun Footer(onAbout: () -> Unit) {
 }
 
 @Composable
-private fun JobBar(job: Job) {
+private fun JobBar(job: Job, waiting: Int) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
@@ -669,7 +692,11 @@ private fun JobBar(job: Job) {
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
-                        if (job.update) "Updating ${job.label}" else "Adding ${job.label} to your car",
+                        when {
+                            waiting > 0 -> "Updating ${job.label}, $waiting more after"
+                            job.update -> "Updating ${job.label}"
+                            else -> "Adding ${job.label} to your car"
+                        },
                         style = MaterialTheme.typography.titleMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
