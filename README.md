@@ -1,31 +1,49 @@
-# aa-launcher-spike
+# CarBridge
 
-> **Phase 1 status (2026-11-06):** the `patcher` module (**CarBridge**, working name) does the
-> whole patch → sign → install flow on the phone. VLC 3.7.1 (single APK) and Firefox 159.0.1
-> (base + 2 split APKs) patched by CarBridge run their full UI in Android Auto. See [CarBridge](#carbridge-phase-1) below.
+An original GPL-3.0 Android app that makes a car copy of an installed app so Android Auto lists
+it and runs its full interface on the car display while parked. Patching, signing and installing
+all happen on the phone. The car-visibility entries come from AABrowser (GPL-3.0); nothing here
+comes from AAAnything.
 
-Throwaway spike for an original GPL-3.0 tool that shows ordinary phone apps on Android Auto.
-It answers two questions before any real code gets written:
-
-- **A. Launcher (no patching):** can a car-visible activity launch an *unmodified* app onto the
-  car display?
-- **B. Patcher:** does adding the car manifest entries to an APK and re-signing it make Android
-  Auto list that app?
-
-The car-visibility entries come from AABrowser (GPL-3.0); nothing here comes from AAAnything.
+> **Status (2026-11-06):** verified on a Galaxy S24 Ultra (Android 17, Android Auto 17.9) with
+> VLC 3.7.1, Firefox 159.0.1 (3 split APKs), GitHub 1.282.0, Offline Games (Unity, 2 split APKs)
+> and Morphe YouTube 21.03.36.
 
 ## Requirements
 
 - Android 15+ phone with USB debugging on
 - Android Auto developer mode: Android Auto settings → tap *Version* 10× → ⋮ → Developer settings
-  → enable **Unknown sources**
+  → enable **Unknown sources** (CarBridge's setup card walks through this)
 - A head unit, or the Desktop Head Unit (DHU) at
   `~/Library/Android/sdk/extras/google/auto/desktop-head-unit`
 
 ## Build and install
 
 ```bash
-JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew :app:installDebug
+JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew :patcher:installDebug
+```
+
+The release build (`:patcher:assembleRelease`) runs R8 and is about 5 MB. apksig's ASN.1 models
+need the keep rules in `patcher/proguard-rules.pro`, or v1 signing fails.
+
+## Use
+
+Open CarBridge, tap **Add** next to an app, and confirm Android's install prompt. The copy installs
+as `<package>.car` next to the original, named "<App> (Car)" with a bridge badge on its icon. Then
+reconnect Android Auto. When the original updates, its copy gets an **UPDATE READY** tab.
+
+| Step | Code | Notes |
+|------|------|-------|
+| Edit the binary manifest and resources | `patch/ManifestPatcher.kt` | ARSCLib 1.4.0 (Apache-2.0) |
+| Label and icon | `patch/IconBadger.kt` | Draws the original icon plus the badge on the phone |
+| Sign | `patch/KeystoreSigner.kt` | apksig 9.5.1 (Apache-2.0); RSA-3072 key in the Android Keystore, 16 KB native-lib alignment |
+| Install | `Installer.kt` | `PackageInstaller` session; the user confirms each install |
+
+A JVM check of the patch against a real APK, or a directory of `base.apk` + `split_*.apk`,
+verified afterwards with `aapt2`. `-PpatchHeap=256m` mirrors a phone's heap cap:
+
+```bash
+JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew :patcher:testDebugUnitTest -PpatchFixture=/path/app.apk
 ```
 
 ## Run with the DHU
@@ -40,106 +58,41 @@ On the phone: Android Auto developer settings → ⋮ → **Start head unit serv
 ~/Library/Android/sdk/extras/google/auto/desktop-head-unit
 ```
 
-## Test A: launcher
+The DHU session drops when a car app is installed. Restart the DHU afterwards.
 
-1. Open **AA Spike** from the car launcher. If it isn't listed, enable Unknown sources and reconnect.
-2. The first log line should show a non-default display id. That id is the car display.
-3. Tap **A1 plain** and then **A2 displayId** for a few apps (VLC, a browser, Settings).
-4. Record where each app appears: car screen, phone screen, or an exception in the log.
+## How it works
 
-Watch the log from the Mac as well:
+The original spike (removed; its code is in commit 329fa49) tested two approaches.
 
-```bash
-~/Library/Android/sdk/platform-tools/adb logcat -s AASpike ActivityTaskManager
-```
+**Launching unmodified apps onto the car display doesn't work.** Each car app gets its own
+virtual-device display (`NativeDisplay:ComponentInfo{…}`). The system's
+`GenericWindowPolicyController` rejects any other app's activity on it: `Activity launch
+disallowed by policy` (result code 102), whatever the caller's permissions or target display id.
 
-**A passes** if any unmodified app renders and responds to touch on the car screen.
+**Patching a copy works.** Android Auto shows an ordinary activity when the app has:
 
-## Test B: patcher
+- `com.google.android.gms.car.application` meta-data pointing to an automotive app descriptor
+- `CAR_LAUNCHER`, `androidx.car.app.category.NAVIGATION` and `android.intent.category.APP_MAPS`
+  on the launcher activity
+- the `androidx.car.app.ACCESS_SURFACE` and `MAP_TEMPLATES` permissions
 
-Use an app whose license allows modification, such as VLC (GPL). Split APKs aren't supported yet.
+Any activity of the patched package may then run on its car display, not just the launcher one.
 
-```bash
-scripts/patch-apk.sh vlc.apk vlc-car.apk
-```
+### Lessons
 
-Uninstall the original first, because the signature differs and that app's data will be lost. Then:
-
-```bash
-~/Library/Android/sdk/platform-tools/adb install vlc-car.apk
-```
-
-**B passes** if the patched app shows up in the car launcher and runs. Never redistribute
-patched APKs.
-
-## Results
-
-Tested 2026-11-06 on a Galaxy S24 Ultra (Android 17, Android Auto 17.9) with DHU 2.0.
-
-| App | A1 plain | A2 displayId | B patched |
-|-----|----------|--------------|-----------|
-| Firefox | blocked | blocked | — |
-| 1Password | — | blocked | — |
-| 2 Player Games | blocked | — | — |
-| VLC 3.7.1 | — | — | **works** (main UI, onboarding, video player) |
-
-**Car visibility:** `CAR_LAUNCHER` + car meta-data alone isn't enough. The launcher activity
-also needs `androidx.car.app.category.NAVIGATION` + `android.intent.category.APP_MAPS`, and
-the `androidx.car.app.ACCESS_SURFACE` / `MAP_TEMPLATES` permissions.
-
-**Approach A is dead.** Each car app gets its own virtual-device display
-(`NativeDisplay:ComponentInfo{…}`). The system's `GenericWindowPolicyController` rejects any
-other app's activity on it: `Activity launch disallowed by policy` (result code 102). The
-block comes from the display's policy, not from caller permissions, so neither a plain launch
-nor targeting the display id gets around it.
-
-**Approach B works.** `scripts/patch-apk.sh vlc.apk vlc-car.apk org.videolan.vlc.car` gives an
-APK that installs next to the original, appears in the car launcher, and runs its full UI.
-Lessons:
-
-- Any activity of the patched package may run on its car display, not just the launcher one.
 - Apps with a `MediaBrowserService` (or `CarAppService`) open in Android Auto's template UI
   instead. The patcher strips those intent filters from the copy.
-- Renaming the package means rewriting provider authorities (including `@string/` ones) and
-  declared permissions, or the install fails with a conflict.
-- Known gap: authorities hardcoded in the app's code still point at the original package.
-- The DHU session drops when a car app is installed. Restart the DHU afterwards.
-
-## CarBridge (Phase 1)
-
-An on-device app that does what `scripts/patch-apk.sh` does, without a computer.
-
-```bash
-JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew :patcher:installDebug
-```
-
-The release build (`:patcher:assembleRelease`) runs R8 and is about 4.3 MB instead of 31 MB.
-apksig's ASN.1 models need the keep rules in `patcher/proguard-rules.pro`, or v1 signing fails.
-
-Open CarBridge, tap **Patch** next to an app, and confirm Android's install prompt. The car copy
-installs as `<package>.car` next to the original. Then reconnect Android Auto.
-
-| Step | Code | Notes |
-|------|------|-------|
-| Edit the binary manifest | `patch/ManifestPatcher.kt` | ARSCLib 1.4.0 (Apache-2.0); adds a car descriptor resource if the app has none |
-| Sign | `patch/KeystoreSigner.kt` | apksig 9.5.1 (Apache-2.0); RSA-3072 key in the Android Keystore, 16 KB native-lib alignment |
-| Install | `Installer.kt` | `PackageInstaller` session; the user confirms each install |
-
-A JVM check of the manifest patch against a real APK, verified afterwards with `aapt2`:
-
-```bash
-JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew :patcher:testDebugUnitTest -PpatchFixture=/path/app.apk
-```
-
-### Lessons from Phase 1
-
-- Apps with `minSdk < 18` get a v1 signature using SHA1withRSA, so the Keystore key must allow
-  SHA-1. Keystore keys can't be changed after creation.
+- Renaming the package means rewriting provider authorities (including `@string/` ones), declared
+  permissions and `android:sharedUserId`, or the install fails with a conflict.
+- The resource table's package name must be renamed too: Unity apps call
+  `getIdentifier(name, type, getPackageName())` and crash on launch otherwise.
 - Authorities inside `<queries>` are lookups, not declarations, and must not be renamed.
 - Split APKs must carry the renamed package too; all parts are signed with the same key and
   installed in one `PackageInstaller` session.
-- `android:sharedUserId` must be renamed as well, or the copy tries to join the original's shared
-  user and fails with `INSTALL_FAILED_SHARED_USER_INCOMPATIBLE`.
+- Apps with `minSdk < 18` get a v1 signature using SHA1withRSA, so the Keystore key must allow
+  SHA-1. Keystore keys can't be changed after creation.
+- ARSCLib keeps an APK's tables in memory; YouTube needs over 100 MB, so CarBridge uses
+  `largeHeap`.
 - The newest AndroidX libraries need AGP 9.1 and compileSdk 37; versions are pinned for AGP 8.13.
 
 ### Known gaps
@@ -151,10 +104,13 @@ JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradle
   one (`org.videolan.vlc.thumbprovider`), so thumbnails in the copy may come from, or miss, the
   original. Fixing this means rewriting dex strings, and ARSCLib's dex module calls itself
   experimental, so it's deferred until a real app needs it.
+- Activity aliases keep the original package prefix, so apps that build alias names from
+  `getPackageName()` can't switch them. Morphe YouTube shows a harmless
+  `CustomBrandingPatch: setBranding failure` toast because of this.
 - The signing key dies with CarBridge's data. After an uninstall or a data clear, existing car
   copies can't be updated in place.
 
-### Release signing
+## Release signing
 
 The release key is `~/.android/carbridge-release.jks` (RSA-4096, alias `carbridge`, valid to 2056,
 certificate SHA-256 `a4:68:93:60:a9:1a:49:b1:6f:a7:b1:50:dc:fc:6e:2b:89:21:1a:cd:b9:63:b5:5f:1b:15:70:4a:da:43:cc:7f`).
@@ -163,6 +119,8 @@ Without them, `assembleRelease` falls back to the debug key.
 
 **Back up both files somewhere safe.** If the key is lost, CarBridge can't be updated in place.
 Users would have to uninstall it, which also deletes the on-device key it uses for car copies.
+
+Never redistribute patched APKs, and only patch apps whose license allows modification.
 
 ## License
 
