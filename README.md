@@ -40,7 +40,11 @@ need the keep rules in `patcher/proguard-rules.pro`, or v1 signing fails.
 
 Open CarBridge, tap **Add** next to an app, and confirm Android's install prompt. The copy installs
 as `<package>.car` next to the original, named "<App> (Car)" with a bridge badge on its icon. Then
-reconnect Android Auto. When the original updates, its copy gets an **UPDATE READY** tab.
+reconnect Android Auto. When the original updates, CarBridge sends a notification, flags the copy,
+and offers **Update all** when several are out of date. Copies drop portrait locks so they fill the
+car screen; the ⋮ menu keeps the portrait layout per app. CarBridge warns before copying apps with
+Google Play's copy protection (`com.pairip.licensecheck`), and points Morphe-patched apps to the
+[CarBridge Patches](https://github.com/jmwerk/carbridge-patches) source instead.
 
 | Step | Code | Notes |
 |------|------|-------|
@@ -127,8 +131,24 @@ certificate SHA-256 `a4:68:93:60:a9:1a:49:b1:6f:a7:b1:50:dc:fc:6e:2b:89:21:1a:cd
 Its password is in `~/.gradle/gradle.properties` as `CARBRIDGE_*`; neither is in the repo.
 Without them, `assembleRelease` falls back to the debug key.
 
-Publish a release with `scripts/release.sh` after bumping `versionCode` and `versionName`. It
-refuses to upload an APK that isn't signed with the release key.
+Publish a release with `scripts/release.sh` after bumping `versionCode` and `versionName` and
+adding `fastlane/metadata/android/en-US/changelogs/<versionCode>.txt`. It refuses to upload an APK
+that isn't signed with the release key.
+
+If the repo has the `CARBRIDGE_KEYSTORE` secret, the script only tags and pushes, and
+`.github/workflows/release.yml` builds, verifies and publishes the release. That stores the key in
+GitHub, so anyone with admin access to the repo could use it. To turn it on:
+
+```bash
+base64 -i ~/.android/carbridge-release.jks | gh secret set CARBRIDGE_KEYSTORE
+```
+
+```bash
+gh secret set CARBRIDGE_STORE_PASSWORD && gh secret set CARBRIDGE_KEY_ALIAS && gh secret set CARBRIDGE_KEY_PASSWORD
+```
+
+Store listing text, icon and screenshots for IzzyOnDroid and F-Droid clients are in
+`fastlane/metadata/android/en-US`.
 
 **Back up both files somewhere safe.** If the key is lost, CarBridge can't be updated in place.
 Users would have to uninstall it, which also deletes the on-device key it uses for car copies.

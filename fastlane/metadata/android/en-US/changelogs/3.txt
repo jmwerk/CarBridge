@@ -1,0 +1,3 @@
+- Update all out-of-date copies in one go
+- Warning before copying apps with Google Play copy protection
+- Morphe-patched apps point to the CarBridge Patches source

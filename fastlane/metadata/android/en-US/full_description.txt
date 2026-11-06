@@ -1,0 +1,17 @@
+<p>CarBridge makes a car copy of an app you already have, so Android Auto lists it and shows its full interface on your car's screen. Use it while parked, or let passengers use it.</p>
+
+<p>Everything happens on your phone. No computer, account or license server is needed.</p>
+
+<ul>
+<li>Pick an app and approve one install prompt. The copy installs next to the original as "&lt;App&gt; (Car)" with a bridge badge on its icon. The original and its data are not touched.</li>
+<li>Copies fill the wide car screen, even for apps locked to portrait. You can keep the portrait layout for each app.</li>
+<li>CarBridge tells you when an app updates and its copy is out of date, and can update all copies in one go.</li>
+<li>It hides apps that already work in Android Auto, and warns you before copying apps that are likely to refuse to run.</li>
+<li>Supports single and split APKs, including large apps and Unity games.</li>
+</ul>
+
+<p><b>Requirements:</b> Android 15 or newer, and Android Auto's developer mode with "Unknown sources" turned on. CarBridge walks you through this.</p>
+
+<p><b>Limits:</b> apps that check Google Play integrity, their own signature or a license may not run as a copy. Copies are signed with a key kept in your phone's secure key store. If you uninstall CarBridge or clear its data, existing copies can't be updated and need to be added again.</p>
+
+<p>Only copy apps whose license allows modification, and never share the copies. Free and open source under GPL-3.0.</p>
