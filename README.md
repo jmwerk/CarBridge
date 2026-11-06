@@ -148,7 +148,12 @@ gh secret set CARBRIDGE_STORE_PASSWORD && gh secret set CARBRIDGE_KEY_ALIAS && g
 ```
 
 Store listing text, icon and screenshots for IzzyOnDroid and F-Droid clients are in
-`fastlane/metadata/android/en-US`.
+`fastlane/metadata/android/en-US`. The screenshot uses made-up sample apps from a debug-only
+screen (`patcher/src/debug`); crop the status and navigation bars off the capture:
+
+```bash
+./gradlew :patcher:installDebug && adb shell am start -n org.carbridge.debug/org.carbridge.ScreenshotActivity
+```
 
 **Back up both files somewhere safe.** If the key is lost, CarBridge can't be updated in place.
 Users would have to uninstall it, which also deletes the on-device key it uses for car copies.

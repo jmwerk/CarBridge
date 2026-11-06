@@ -100,7 +100,16 @@ class HomeModel(app: Application) : AndroidViewModel(app) {
         next?.let { add(it, update = true) }
     }
 
+    /** Fixed sample data for store screenshots; never set in normal use. */
+    private var sample: Catalog? = null
+
+    fun showSample(catalog: Catalog) {
+        sample = catalog
+        refresh()
+    }
+
     fun refresh() {
+        sample?.let { setup = Setup(canInstall = true, developerMode = true, unknownSources = true); catalog = it; return }
         setup = readSetup()
         viewModelScope.launch {
             catalog = withContext(Dispatchers.IO) { AppCatalog.load(getApplication(), ::fillsScreen) }

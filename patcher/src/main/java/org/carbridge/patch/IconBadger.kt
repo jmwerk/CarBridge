@@ -42,7 +42,7 @@ object IconBadger {
     }
 
     /** White-ringed green disc with the bridge mark, inside the 66dp safe zone's lower right. */
-    private fun badge(): Bitmap {
+    internal fun badge(): Bitmap {
         val bitmap = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
