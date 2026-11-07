@@ -1,9 +1,8 @@
 package org.carbridge.patch
 
-import org.carbridge.core.CarOptions
-
 import com.reandroid.apk.ApkModule
 import java.io.File
+import org.carbridge.core.CarOptions
 import org.junit.Assert.assertEquals
 import org.junit.Assume.assumeTrue
 import org.junit.Test
