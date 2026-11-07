@@ -9,6 +9,32 @@ comes from AAAnything.
 > VLC 3.7.1, Firefox 159.0.1 (3 split APKs), GitHub 1.282.0, Offline Games (Unity, 2 split APKs)
 > and Morphe YouTube 21.03.36.
 
+## CarBridge app or CarBridge Patches?
+
+Both put an app's full interface on the Android Auto screen, using the same rules (CarBridge's
+`core` module). They differ in what they do to the app:
+
+| | [CarBridge app](https://github.com/jmwerk/CarBridge) | [CarBridge Patches](https://github.com/jmwerk/carbridge-patches) for Morphe |
+|---|---|---|
+| What you get | A separate copy, "*App* (Car)", next to the original | The patched app; no extra car copy |
+| Original app | Untouched; keeps updating from its store | Replaced, unless Morphe gives the app its own package name (as it does for YouTube) |
+| App data and sign-in | The copy starts empty; sign in again | Kept when the patched build replaces the original |
+| Works with | Almost any installed app, including Play Store split APKs | Apps you patch in Morphe Manager, from an APK you provide |
+| Combine with other patches | No | Yes, e.g. Morphe's YouTube patches |
+| After the original updates | CarBridge notifies you; tap **Update** to rebuild the copy | Repatch the new version in Morphe Manager |
+| Options | Per copy, from its ⋮ menu: fill the car screen, keep the audio player | Patch options: Fill the car screen, Keep media services |
+| What you need | Only the phone | Morphe Manager |
+
+**Use the CarBridge app** for apps you install from a store and don't otherwise modify, like
+games, browsers and video apps. It's the quickest route and never touches the original.
+
+**Use CarBridge Patches** for apps you already patch with Morphe (YouTube, YouTube Music and
+others), or when you want one patched app instead of an original plus a car copy. CarBridge
+points Morphe-patched apps here automatically.
+
+Neither works with apps that check Play Integrity, their own signature or a license; both
+re-sign the app.
+
 ## Install
 
 Get it with [Obtainium](https://github.com/ImranR98/Obtainium), which installs and updates
