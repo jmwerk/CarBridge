@@ -1,0 +1,2 @@
+- Choose the screen layout and audio player before adding an app
+- Update button on the "copy out of date" notification
