@@ -35,6 +35,8 @@ points Morphe-patched apps here automatically.
 Neither works with apps that check Play Integrity, their own signature or a license; both
 re-sign the app.
 
+Which apps work: see [COMPATIBILITY.md](COMPATIBILITY.md).
+
 ## Install
 
 Get it with [Obtainium](https://github.com/ImranR98/Obtainium), which installs and updates
