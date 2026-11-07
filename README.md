@@ -189,6 +189,18 @@ Users would have to uninstall it, which also deletes the on-device key it uses f
 
 Never redistribute patched APKs, and only patch apps whose license allows modification.
 
+## Inspiration
+
+[AAAnything](https://github.com/kododake/AAAnything) showed that everyday apps can run on Android
+Auto without root, and CarBridge owes the idea to it. CarBridge is a separate, from-scratch take
+that shares no code with it, with one goal of its own: every app is free, with no tiers or sign-in,
+and the source is open under GPL-3.0.
+
+## Support
+
+CarBridge is free for every app and will stay that way. If it's useful to you, you can
+[buy me a coffee](https://buymeacoffee.com/jmwerk). It's entirely optional and doesn't unlock anything.
+
 ## License
 
 GPL-3.0. See [LICENSE](LICENSE).
