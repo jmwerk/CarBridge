@@ -48,6 +48,7 @@ Google Play's copy protection (`com.pairip.licensecheck`), and points Morphe-pat
 
 | Step | Code | Notes |
 |------|------|-------|
+| Android Auto rules, shared with [CarBridge Patches](https://github.com/jmwerk/carbridge-patches) | `core/…/CarPatch.kt` | Plain Kotlin |
 | Edit the binary manifest and resources | `patch/ManifestPatcher.kt` | ARSCLib 1.4.0 (Apache-2.0) |
 | Label and icon | `patch/IconBadger.kt` | Draws the original icon plus the badge on the phone |
 | Sign | `patch/KeystoreSigner.kt` | apksig 9.5.1 (Apache-2.0); RSA-3072 key in the Android Keystore, 16 KB native-lib alignment |

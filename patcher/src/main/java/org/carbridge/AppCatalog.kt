@@ -11,6 +11,8 @@ import android.graphics.drawable.Drawable
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import java.io.File
+import org.carbridge.core.CarOptions
+import org.carbridge.core.CarPatch
 import org.carbridge.patch.PatchPipeline
 
 /** An app the user can add to the car. */
@@ -43,7 +45,9 @@ data class CarCopy(
     val originalVersion: Version?,
     /** The original locks some screens to portrait, so the layout choice matters. */
     val portraitLocked: Boolean,
-    val fillsScreen: Boolean,
+    /** The original has a media browser service, so the audio-player choice matters. */
+    val hasMediaService: Boolean,
+    val options: CarOptions,
 ) {
     /** True when the original app has been updated past the version this copy was made from. */
     val outdated get() = version != null && originalVersion != null && originalVersion.code > version.code
@@ -56,7 +60,7 @@ data class Catalog(val copies: List<CarCopy>, val available: List<SourceApp>)
 object AppCatalog {
     private const val ICON_PX = 144
 
-    fun load(context: Context, fillsScreen: (String) -> Boolean): Catalog {
+    fun load(context: Context, options: (String) -> CarOptions): Catalog {
         val pm = context.packageManager
         val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         val launchable = pm.queryIntentActivities(launcher, 0)
@@ -99,7 +103,8 @@ object AppCatalog {
                 version = versionOf(pm, info.packageName),
                 originalVersion = original?.let { versionOf(pm, originalPkg) },
                 portraitLocked = original != null && locksPortrait(pm, originalPkg),
-                fillsScreen = fillsScreen(originalPkg),
+                hasMediaService = original != null && hasMediaService(pm, originalPkg),
+                options = options(originalPkg),
             )
         }.sortedWith(compareBy({ !it.outdated }, { it.label.lowercase() }))
 
@@ -122,6 +127,11 @@ object AppCatalog {
             pm.getPackageInfo(pkg, PackageManager.GET_ACTIVITIES).activities.orEmpty()
                 .any { it.screenOrientation in PORTRAIT_ORIENTATIONS }
         }.getOrDefault(false)
+
+    private fun hasMediaService(pm: PackageManager, pkg: String): Boolean =
+        CarPatch.MEDIA_SERVICE_ACTIONS.any { action ->
+            pm.queryIntentServices(Intent(action).setPackage(pkg), 0).isNotEmpty()
+        }
 
     private fun versionOf(pm: PackageManager, pkg: String): Version? =
         runCatching { pm.getPackageInfo(pkg, 0).let { Version(it.longVersionCode, it.versionName) } }.getOrNull()

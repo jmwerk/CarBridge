@@ -13,4 +13,5 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "aa-launcher-spike"
+include(":core")
 include(":patcher")

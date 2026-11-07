@@ -13,6 +13,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.carbridge.core.CarOptions
 import org.carbridge.patch.PatchPipeline
 
 private const val TAG = "CarBridge"
@@ -112,7 +113,7 @@ class HomeModel(app: Application) : AndroidViewModel(app) {
         sample?.let { setup = Setup(canInstall = true, developerMode = true, unknownSources = true); catalog = it; return }
         setup = readSetup()
         viewModelScope.launch {
-            catalog = withContext(Dispatchers.IO) { AppCatalog.load(getApplication(), ::fillsScreen) }
+            catalog = withContext(Dispatchers.IO) { AppCatalog.load(getApplication(), ::carOptions) }
         }
     }
 
@@ -121,13 +122,23 @@ class HomeModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putBoolean("show_auto_apps", showAutoApps).apply()
     }
 
-    /** Copies drop portrait locks unless the user chose to keep an app's portrait layout. */
-    private fun fillsScreen(originalPackage: String) = !prefs.getBoolean("keep_portrait:$originalPackage", false)
+    /** Per-app choices; by default copies fill the screen and drop media services. */
+    private fun carOptions(originalPackage: String) = CarOptions(
+        keepMediaServices = prefs.getBoolean("keep_media:$originalPackage", false),
+        fillScreen = !prefs.getBoolean("keep_portrait:$originalPackage", false),
+    )
 
     /** Saves the layout choice and rebuilds the copy with it. */
     fun setFillScreen(copy: CarCopy, fill: Boolean) {
         val original = copy.original ?: return
         prefs.edit().putBoolean("keep_portrait:${original.info.packageName}", !fill).apply()
+        add(original, update = true)
+    }
+
+    /** Saves the audio-player choice and rebuilds the copy with it. */
+    fun setKeepMedia(copy: CarCopy, keep: Boolean) {
+        val original = copy.original ?: return
+        prefs.edit().putBoolean("keep_media:${original.info.packageName}", keep).apply()
         add(original, update = true)
     }
 
@@ -154,7 +165,7 @@ class HomeModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val apks = withContext(Dispatchers.IO) {
-                    PatchPipeline(context) { line -> onLog(line) }.patch(source.info, fillsScreen(source.info.packageName))
+                    PatchPipeline(context) { line -> onLog(line) }.patch(source.info, carOptions(source.info.packageName))
                 }
                 job = job?.copy(step = JobStep.Confirm.ordinal)
                 withContext(Dispatchers.IO) { Installer.install(context, apks, carPackage) }

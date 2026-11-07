@@ -6,27 +6,29 @@ import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
 import com.reandroid.arsc.chunk.xml.ResXmlAttribute
 import com.reandroid.arsc.chunk.xml.ResXmlDocument
 import com.reandroid.arsc.chunk.xml.ResXmlElement
+import com.reandroid.arsc.chunk.PackageBlock
 import com.reandroid.arsc.value.ValueType
+import org.carbridge.core.AndroidAttr
+import org.carbridge.core.CarOptions
+import org.carbridge.core.CarPatch
+import org.carbridge.core.ManifestElement
+import org.carbridge.core.ManifestHost
 
 /**
- * Makes an app's launcher activity show up in Android Auto, following what the spike proved:
- * car meta-data, CAR_LAUNCHER + navigation categories, car-surface permissions, and no
- * media/template services (Android Auto would show its template UI instead).
+ * Applies the shared [CarPatch] rules to binary XML with ARSCLib, then the copy-only steps:
+ * branding and the package rename that lets the copy install next to the original.
  */
 class ManifestPatcher(private val log: (String) -> Unit) {
 
     /** How the car copy presents itself; icon layers are PNGs for an adaptive icon. */
     class Branding(val label: String, val iconBackground: ByteArray?, val iconForeground: ByteArray?)
 
-    /** [fillScreen] drops portrait locks so the copy can use the whole landscape car display. */
-    fun patch(apk: ApkModule, newPackage: String?, branding: Branding? = null, fillScreen: Boolean = false) {
+    fun patch(apk: ApkModule, newPackage: String?, branding: Branding? = null, options: CarOptions = CarOptions()) {
         val manifest = apk.androidManifest ?: error("APK has no AndroidManifest.xml")
         val app = manifest.applicationElement ?: error("manifest has no <application>")
 
-        addCarEntries(apk, manifest, app)
-        stripTemplateServices(app)
+        CarPatch.apply(ArscHost(apk, manifest, app), options)
         if (branding != null) applyBranding(apk, app, branding)
-        if (fillScreen) unlockPortrait(app)
         if (newPackage != null) renamePackage(apk, manifest, newPackage)
         apk.refreshManifest()
         apk.refreshTable()
@@ -40,50 +42,64 @@ class ManifestPatcher(private val log: (String) -> Unit) {
         if (apk.hasTableBlock()) apk.refreshTable()
     }
 
-    private fun addCarEntries(apk: ApkModule, manifest: AndroidManifestBlock, app: ResXmlElement) {
-        app.getOrCreateAndroidAttribute("appCategory", ID_APP_CATEGORY).setValueAsDecimal(APP_CATEGORY_GAME)
-        ensureMeta(app, "distractionOptimized") { it.setValueAsBoolean(true) }
-        ensureMeta(app, "androidx.car.app.minCarApiLevel") { it.setValueAsDecimal(7) }
-        if (findMeta(app, CAR_APP_META) == null) {
-            val resId = addAutomotiveDescriptor(apk)
-            ensureMeta(app, CAR_APP_META, ID_RESOURCE, "resource") { it.setValueAsResourceId(resId) }
+    private inner class ArscHost(
+        private val apk: ApkModule,
+        private val block: AndroidManifestBlock,
+        app: ResXmlElement,
+    ) : ManifestHost {
+        private val pkg: PackageBlock by lazy {
+            apk.getTableBlock(false)?.pickOne() ?: error("APK has no resources.arsc")
+        }
+        override val manifest = ArscElement(block.manifestElement ?: error("manifest has no <manifest>")) { pkg }
+        override val application = ArscElement(app) { pkg }
+
+        override fun hasPermission(name: String) = block.getUsesPermission(name) != null
+        override fun addPermission(name: String) {
+            block.addUsesPermission(name)
         }
 
-        for (perm in CAR_PERMISSIONS) {
-            if (manifest.getUsesPermission(perm) == null) manifest.addUsesPermission(perm)
+        override fun addAutomotiveDescriptor(name: String, uses: String) {
+            val path = "res/xml/$name.xml"
+            pkg.getOrCreate("", "xml", name).setValueAsString(path)
+            val doc = ResXmlDocument()
+            doc.newElement("automotiveApp").newElement("uses").getOrCreateAttribute("name", 0).setValueAsString(uses)
+            doc.refreshFull()
+            apk.add(ByteInputSource(doc.bytes, path))
         }
 
-        val patched = mutableListOf<String>()
-        for (activity in app.listElements("activity") + app.listElements("activity-alias")) {
-            for (filter in activity.listElements("intent-filter")) {
-                if (!isLauncherFilter(filter)) continue
-                val existing = filter.listElements("category").mapNotNull { nameOf(it) }.toSet()
-                for (cat in CAR_CATEGORIES - existing) {
-                    filter.newElement("category").getOrCreateAndroidAttribute("name", ID_NAME).setValueAsString(cat)
-                }
-                ensureMeta(activity, "distractionOptimized") { it.setValueAsBoolean(true) }
-                activity.getOrCreateAndroidAttribute("resizeableActivity", ID_RESIZEABLE).setValueAsBoolean(true)
-                nameOf(activity)?.let(patched::add)
-            }
-        }
-        check(patched.isNotEmpty()) { "no launcher activity found" }
-        log("Car-enabled: ${patched.joinToString()}")
+        override fun log(message: String) = this@ManifestPatcher.log(message)
     }
 
-    /** Adds res/xml/<name>.xml declaring the app as a car app and returns its resource id. */
-    private fun addAutomotiveDescriptor(apk: ApkModule): Int {
-        val table = apk.getTableBlock(false) ?: error("APK has no resources.arsc")
-        val pkg = table.pickOne() ?: error("resources.arsc has no package")
-        val path = "res/xml/$DESCRIPTOR_NAME.xml"
-        val entry = pkg.getOrCreate("", "xml", DESCRIPTOR_NAME)
-        entry.setValueAsString(path)
+    /** [ManifestElement] over ARSCLib; resource references resolve in the APK's own table. */
+    private class ArscElement(val el: ResXmlElement, private val pkg: () -> PackageBlock) : ManifestElement {
+        override val tag: String get() = el.name
 
-        val doc = ResXmlDocument()
-        val root = doc.newElement("automotiveApp")
-        root.newElement("uses").getOrCreateAttribute("name", 0).setValueAsString("media")
-        doc.refreshFull()
-        apk.add(ByteInputSource(doc.bytes, path))
-        return entry.resourceId
+        override fun children(tag: String) = el.listElements(tag).map { ArscElement(it, pkg) }
+        override fun getString(attr: AndroidAttr) = el.searchAttributeByResourceId(attr.id)?.stringOrNull()
+        override fun getInt(attr: AndroidAttr): Int? {
+            val a = el.searchAttributeByResourceId(attr.id) ?: return null
+            return if (a.valueType == ValueType.DEC || a.valueType == ValueType.HEX) a.data else null
+        }
+
+        override fun setString(attr: AndroidAttr, value: String) = set(attr).setValueAsString(value)
+        override fun setBoolean(attr: AndroidAttr, value: Boolean) = set(attr).setValueAsBoolean(value)
+        override fun setInt(attr: AndroidAttr, value: Int) = set(attr).setValueAsDecimal(value)
+        override fun setEnum(attr: AndroidAttr, value: String) =
+            set(attr).setValueAsDecimal(attr.enumValues[value] ?: error("unknown ${attr.name} value $value"))
+
+        override fun setResource(attr: AndroidAttr, type: String, name: String) =
+            set(attr).setValueAsResourceId(pkg().getOrCreate("", type, name).resourceId)
+
+        override fun remove(attr: AndroidAttr) {
+            el.searchAttributeByResourceId(attr.id)?.let(el::removeAttribute)
+        }
+
+        override fun append(tag: String): ManifestElement = ArscElement(el.newElement(tag), pkg)
+        override fun removeChild(child: ManifestElement) {
+            (child as ArscElement).el.removeSelf()
+        }
+
+        private fun set(attr: AndroidAttr) = el.getOrCreateAndroidAttribute(attr.name, attr.id)
     }
 
     /** Gives the copy its own label and icon so it can't be mistaken for the original. */
@@ -138,32 +154,7 @@ class ManifestPatcher(private val log: (String) -> Unit) {
     }
 
     private fun launcherActivities(app: ResXmlElement) =
-        (app.listElements("activity") + app.listElements("activity-alias"))
-            .filter { a -> a.listElements("intent-filter").any(::isLauncherFilter) }
-
-    private fun unlockPortrait(app: ResXmlElement) {
-        var unlocked = 0
-        for (activity in app.listElements("activity")) {
-            val attr = activity.searchAttributeByResourceId(ID_SCREEN_ORIENTATION) ?: continue
-            if (attr.valueType == ValueType.DEC && attr.data in PORTRAIT_ORIENTATIONS) {
-                activity.removeAttribute(attr)
-                unlocked++
-            }
-        }
-        if (unlocked > 0) log("Unlocked portrait on $unlocked activities")
-    }
-
-    private fun stripTemplateServices(app: ResXmlElement) {
-        for (service in app.listElements("service")) {
-            for (filter in service.listElements("intent-filter")) {
-                val actions = filter.listElements("action").mapNotNull { nameOf(it) }.toSet()
-                if (actions.any { it in TEMPLATE_SERVICE_ACTIONS }) {
-                    filter.removeSelf()
-                    log("Removed car template filter from ${nameOf(service)}")
-                }
-            }
-        }
-    }
+        CarPatch.launcherActivities(ArscElement(app) { error("no table needed") }).map { (it as ArscElement).el }
 
     /** Lets the patched copy install next to the original; see the spike README for why. */
     private fun renamePackage(apk: ApkModule, manifest: AndroidManifestBlock, newPackage: String) {
@@ -218,32 +209,7 @@ class ManifestPatcher(private val log: (String) -> Unit) {
         }
     }
 
-    private fun ensureMeta(
-        parent: ResXmlElement,
-        name: String,
-        valueId: Int = ID_VALUE,
-        valueAttr: String = "value",
-        set: (ResXmlAttribute) -> Unit,
-    ) {
-        if (findMeta(parent, name) != null) return
-        val meta = parent.newElement("meta-data")
-        meta.getOrCreateAndroidAttribute("name", ID_NAME).setValueAsString(name)
-        set(meta.getOrCreateAndroidAttribute(valueAttr, valueId))
-    }
-
-    private fun findMeta(parent: ResXmlElement, name: String) =
-        parent.listElements("meta-data").firstOrNull { nameOf(it) == name }
-
-    private fun isLauncherFilter(filter: ResXmlElement): Boolean {
-        val actions = filter.listElements("action").mapNotNull { nameOf(it) }
-        val cats = filter.listElements("category").mapNotNull { nameOf(it) }
-        return "android.intent.action.MAIN" in actions && "android.intent.category.LAUNCHER" in cats
-    }
-
     private fun nameOf(el: ResXmlElement) = el.searchAttributeByResourceId(ID_NAME)?.stringOrNull()
-
-    private fun ResXmlAttribute.stringOrNull(): String? =
-        if (valueType == ValueType.STRING) valueAsString else null
 
     companion object {
         // android.R.attr ids, verified against android-36 android.jar
@@ -255,38 +221,15 @@ class ManifestPatcher(private val log: (String) -> Unit) {
         private const val ID_READ_PERMISSION = 0x01010007
         private const val ID_WRITE_PERMISSION = 0x01010008
         private const val ID_AUTHORITIES = 0x01010018
-        private const val ID_SCREEN_ORIENTATION = 0x0101001e
-        private const val ID_VALUE = 0x01010024
-        private const val ID_RESOURCE = 0x01010025
         private const val ID_TARGET_ACTIVITY = 0x01010202
         private const val ID_BACKUP_AGENT = 0x0101027f
-        private const val ID_RESIZEABLE = 0x010104f6
         private const val ID_DRAWABLE = 0x01010199
         private const val ID_ROUND_ICON = 0x0101052c
-        private const val ID_APP_CATEGORY = 0x01010545
-        private const val APP_CATEGORY_GAME = 0
 
         private const val ANDROID_NS = "http://schemas.android.com/apk/res/android"
-        private const val CAR_APP_META = "com.google.android.gms.car.application"
-        private const val DESCRIPTOR_NAME = "carbridge_automotive_app_desc"
-
-        // ActivityInfo.SCREEN_ORIENTATION_{PORTRAIT, SENSOR_PORTRAIT, REVERSE_PORTRAIT, USER_PORTRAIT}
-        private val PORTRAIT_ORIENTATIONS = setOf(1, 7, 9, 12)
 
         private val CLASS_NAME_ATTRS = listOf(ID_NAME, ID_TARGET_ACTIVITY, ID_BACKUP_AGENT)
         private val PERMISSION_ATTRS = listOf(ID_NAME, ID_PERMISSION, ID_READ_PERMISSION, ID_WRITE_PERMISSION)
-
-        private val CAR_PERMISSIONS = listOf("androidx.car.app.ACCESS_SURFACE", "androidx.car.app.MAP_TEMPLATES")
-        private val CAR_CATEGORIES = setOf(
-            "android.intent.category.CAR_LAUNCHER",
-            "androidx.car.app.category.NAVIGATION",
-            "android.intent.category.APP_MAPS",
-        )
-        private val TEMPLATE_SERVICE_ACTIONS = setOf(
-            "android.media.browse.MediaBrowserService",
-            "androidx.media3.session.MediaLibraryService",
-            "androidx.car.app.CarAppService",
-        )
 
         /** Swaps the old package prefix in each `;`-separated part, prefixing parts without it. */
         fun renameValue(value: String, old: String, new: String): String =
@@ -298,3 +241,6 @@ class ManifestPatcher(private val log: (String) -> Unit) {
             }
     }
 }
+
+private fun ResXmlAttribute.stringOrNull(): String? =
+    if (valueType == ValueType.STRING) valueAsString else null

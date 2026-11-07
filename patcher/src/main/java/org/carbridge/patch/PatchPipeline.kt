@@ -1,5 +1,7 @@
 package org.carbridge.patch
 
+import org.carbridge.core.CarOptions
+
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import com.reandroid.apk.ApkModule
@@ -9,7 +11,7 @@ import java.io.File
 /** Original APK(s) in, signed car-enabled APK(s) out, base first. Runs off the main thread. */
 class PatchPipeline(private val context: Context, private val log: (String) -> Unit) {
 
-    fun patch(app: ApplicationInfo, fillScreen: Boolean): List<File> {
+    fun patch(app: ApplicationInfo, options: CarOptions): List<File> {
         val work = File(context.cacheDir, "patch").apply { deleteRecursively(); mkdirs() }
         val newPackage = carPackageName(app.packageName)
         val splits = app.splitSourceDirs.orEmpty().map(::File)
@@ -21,7 +23,7 @@ class PatchPipeline(private val context: Context, private val log: (String) -> U
         val patcher = ManifestPatcher(log)
         val unsignedBase = File(work, "base.unsigned.apk")
         val branding = IconBadger.branding(context, app)
-        val minSdk = rewrite(base, unsignedBase) { apk -> patcher.patch(apk, newPackage, branding, fillScreen) }
+        val minSdk = rewrite(base, unsignedBase) { apk -> patcher.patch(apk, newPackage, branding, options) }
         val unsignedSplits = splits.mapIndexed { i, split ->
             File(work, "split$i.unsigned.apk").also { out ->
                 rewrite(split, out) { apk -> patcher.patchSplit(apk, newPackage) }

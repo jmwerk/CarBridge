@@ -18,6 +18,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.ViewModelProvider
+import org.carbridge.core.CarOptions
 import org.carbridge.patch.IconBadger
 import org.carbridge.ui.CarBridgeTheme
 import org.carbridge.ui.HomeActions
@@ -30,7 +31,7 @@ class ScreenshotActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val model = ViewModelProvider(this)[HomeModel::class.java]
         model.showSample(sampleCatalog())
-        val none = HomeActions({}, {}, {}, {}, {}, {}, {}, {}, { _, _ -> }, {})
+        val none = HomeActions({}, {}, {}, {}, {}, {}, {}, {}, { _, _ -> }, { _, _ -> }, {})
         setContent { CarBridgeTheme { HomeScreen(model, none) } }
     }
 
@@ -71,7 +72,8 @@ class ScreenshotActivity : ComponentActivity() {
             version = version,
             originalVersion = originalVersion,
             portraitLocked = portrait,
-            fillsScreen = true,
+            hasMediaService = false,
+            options = CarOptions(),
         )
 
     private fun icon(letter: String, color: Long, badged: Boolean): ImageBitmap {

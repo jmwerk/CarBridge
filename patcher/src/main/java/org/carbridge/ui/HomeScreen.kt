@@ -46,6 +46,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
@@ -109,6 +110,7 @@ class HomeActions(
     val updateAll: (List<CarCopy>) -> Unit,
     val openMorphe: () -> Unit,
     val setFillScreen: (CarCopy, Boolean) -> Unit,
+    val setKeepMedia: (CarCopy, Boolean) -> Unit,
     val remove: (CarCopy) -> Unit,
 )
 
@@ -187,6 +189,7 @@ fun HomeScreen(model: HomeModel, actions: HomeActions) {
                             onUpdate = { actions.update(copy) },
                             onRemove = { actions.remove(copy) },
                             onFillScreen = { fill -> actions.setFillScreen(copy, fill) },
+                            onKeepMedia = { keep -> actions.setKeepMedia(copy, keep) },
                         )
                     }
                     }
@@ -456,6 +459,7 @@ private fun CarSign(
     onUpdate: () -> Unit,
     onRemove: () -> Unit,
     onFillScreen: (Boolean) -> Unit,
+    onKeepMedia: (Boolean) -> Unit,
 ) {
     val signs = LocalSigns.current
     var menu by remember { mutableStateOf(false) }
@@ -502,9 +506,18 @@ private fun CarSign(
                         }
                         if (copy.original != null && copy.portraitLocked) {
                             DropdownMenuItem(
-                                text = { Text(if (copy.fillsScreen) "Keep portrait layout" else "Fill the car screen") },
+                                text = { Text(if (copy.options.fillScreen) "Keep portrait layout" else "Fill the car screen") },
                                 leadingIcon = { Icon(LandscapeGlyph, contentDescription = null) },
-                                onClick = { menu = false; onFillScreen(!copy.fillsScreen) },
+                                onClick = { menu = false; onFillScreen(!copy.options.fillScreen) },
+                            )
+                        }
+                        if (copy.original != null && copy.hasMediaService) {
+                            val keep = copy.options.keepMediaServices
+                            DropdownMenuItem(
+                                // Kept media services let Android Auto show its audio player for the copy
+                                text = { Text(if (keep) "Always show the full app" else "Use Android Auto's audio player") },
+                                leadingIcon = { Icon(Icons.Rounded.PlayArrow, contentDescription = null) },
+                                onClick = { menu = false; onKeepMedia(!keep) },
                             )
                         }
                         DropdownMenuItem(

@@ -62,6 +62,7 @@ kotlin {
 }
 
 dependencies {
+    implementation(project(":core"))
     implementation("io.github.reandroid:ARSCLib:1.4.0")
     implementation("com.android.tools.build:apksig:9.5.1")
 
