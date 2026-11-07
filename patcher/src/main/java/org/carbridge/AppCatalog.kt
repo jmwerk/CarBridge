@@ -122,6 +122,12 @@ object AppCatalog {
         caution = caution,
     )
 
+    /** Which per-app choices matter for [pkg]: portrait locks and an Android Auto audio player. */
+    fun traits(context: Context, pkg: String): Pair<Boolean, Boolean> {
+        val pm = context.packageManager
+        return locksPortrait(pm, pkg) to hasMediaService(pm, pkg)
+    }
+
     private fun locksPortrait(pm: PackageManager, pkg: String): Boolean =
         runCatching {
             pm.getPackageInfo(pkg, PackageManager.GET_ACTIVITIES).activities.orEmpty()

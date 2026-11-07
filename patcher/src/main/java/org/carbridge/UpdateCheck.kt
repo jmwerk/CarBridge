@@ -25,6 +25,10 @@ object UpdateCheck {
     private const val JOB_ID = 1
     private const val CHANNEL = "copy_updates"
     private const val NOTIFICATION_ID = 1
+    const val ACTION_UPDATE = "org.carbridge.action.UPDATE_COPIES"
+
+    /** Original package to update; absent means every outdated copy. */
+    const val EXTRA_PACKAGE = "original_package"
     private const val INTERVAL_HOURS = 6L
 
     fun schedule(context: Context) {
@@ -65,6 +69,10 @@ object UpdateCheck {
         }
     }
 
+    fun dismiss(context: Context) {
+        context.getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
+    }
+
     fun dismissIfResolved(context: Context) {
         if (findOutdated(context).isEmpty()) {
             context.getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
@@ -92,7 +100,17 @@ object UpdateCheck {
             Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_IMMUTABLE,
         )
+        val updateIntent = Intent(context, MainActivity::class.java)
+            .setAction(ACTION_UPDATE)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        if (outdated.size == 1) updateIntent.putExtra(EXTRA_PACKAGE, outdated[0].originalPackage)
+        val update = PendingIntent.getActivity(
+            context, 1, updateIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val updateLabel = if (outdated.size == 1) "Update" else "Update all"
         val notification = Notification.Builder(context, CHANNEL)
+            .addAction(Notification.Action.Builder(null, updateLabel, update).build())
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(text)

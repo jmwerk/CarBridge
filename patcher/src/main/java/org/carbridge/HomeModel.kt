@@ -32,6 +32,9 @@ data class Setup(val canInstall: Boolean, val developerMode: Boolean, val unknow
     val complete get() = canInstall && developerMode && unknownSources
 }
 
+/** An add waiting for the user's layout and audio choices. */
+data class AddChoice(val app: SourceApp, val portraitLocked: Boolean, val hasMediaService: Boolean)
+
 data class UserMessage(val text: String, val details: String? = null)
 
 class HomeModel(app: Application) : AndroidViewModel(app) {
@@ -101,6 +104,56 @@ class HomeModel(app: Application) : AndroidViewModel(app) {
         next?.let { add(it, update = true) }
     }
 
+    var pendingAdd by mutableStateOf<AddChoice?>(null)
+        private set
+
+    /** Asks for choices first when they matter, so the copy isn't patched twice. */
+    fun requestAdd(app: SourceApp) {
+        if (job != null) return
+        viewModelScope.launch {
+            val (portrait, media) = withContext(Dispatchers.IO) {
+                AppCatalog.traits(getApplication(), app.info.packageName)
+            }
+            if (portrait || media) pendingAdd = AddChoice(app, portrait, media) else add(app, update = false)
+        }
+    }
+
+    fun confirmAdd(choice: AddChoice, options: CarOptions) {
+        val pkg = choice.app.info.packageName
+        prefs.edit()
+            .putBoolean("keep_portrait:$pkg", !options.fillScreen)
+            .putBoolean("keep_media:$pkg", options.keepMediaServices)
+            .apply()
+        pendingAdd = null
+        add(choice.app, update = false)
+    }
+
+    fun cancelAdd() {
+        pendingAdd = null
+    }
+
+    /** Set from the update notification; null package means every outdated copy. */
+    private var pendingUpdate: String? = null
+    private var pendingUpdateAll = false
+
+    fun updateFromNotification(originalPackage: String?) {
+        if (originalPackage == null) pendingUpdateAll = true else pendingUpdate = originalPackage
+        refresh()
+    }
+
+    private fun runPendingUpdate(catalog: Catalog) {
+        if (job != null) return
+        val all = pendingUpdateAll
+        val pkg = pendingUpdate
+        pendingUpdateAll = false
+        pendingUpdate = null
+        when {
+            all -> updateAll(catalog.copies)
+            pkg != null -> catalog.copies.firstOrNull { it.original?.info?.packageName == pkg }?.original
+                ?.let { add(it, update = true) }
+        }
+    }
+
     /** Fixed sample data for store screenshots; never set in normal use. */
     private var sample: Catalog? = null
 
@@ -113,7 +166,9 @@ class HomeModel(app: Application) : AndroidViewModel(app) {
         sample?.let { setup = Setup(canInstall = true, developerMode = true, unknownSources = true); catalog = it; return }
         setup = readSetup()
         viewModelScope.launch {
-            catalog = withContext(Dispatchers.IO) { AppCatalog.load(getApplication(), ::carOptions) }
+            val loaded = withContext(Dispatchers.IO) { AppCatalog.load(getApplication(), ::carOptions) }
+            catalog = loaded
+            runPendingUpdate(loaded)
         }
     }
 

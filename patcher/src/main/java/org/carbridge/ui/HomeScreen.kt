@@ -90,7 +90,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import org.carbridge.AddChoice
 import org.carbridge.CarCopy
+import org.carbridge.core.CarOptions
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.Switch
+import androidx.compose.ui.semantics.Role
 import org.carbridge.Caution
 import org.carbridge.HomeModel
 import org.carbridge.Job
@@ -235,6 +240,9 @@ fun HomeScreen(model: HomeModel, actions: HomeActions) {
         }
     }
 
+    model.pendingAdd?.let { choice ->
+        AddChoiceDialog(choice, onConfirm = { model.confirmAdd(choice, it) }, onDismiss = model::cancelAdd)
+    }
     cautionFor?.let { app ->
         CautionDialog(
             app,
@@ -646,6 +654,60 @@ private fun UpdateAllRow(count: Int, enabled: Boolean, onClick: () -> Unit) {
             modifier = Modifier.weight(1f),
         )
         FilledTonalButton(onClick = onClick, enabled = enabled) { Text("Update all") }
+    }
+}
+
+@Composable
+private fun AddChoiceDialog(choice: AddChoice, onConfirm: (CarOptions) -> Unit, onDismiss: () -> Unit) {
+    var fill by rememberSaveable { mutableStateOf(true) }
+    var player by rememberSaveable { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add ${choice.app.label}") },
+        text = {
+            Column {
+                Text(
+                    "You can change these later from the copy's ⋮ menu.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (choice.portraitLocked) {
+                    ChoiceRow(
+                        "Fill the car screen",
+                        "Some screens only work upright. Turn off to keep them narrow but unchanged.",
+                        fill,
+                    ) { fill = it }
+                }
+                if (choice.hasMediaService) {
+                    ChoiceRow(
+                        "Use Android Auto's audio player",
+                        "Android Auto shows its own player for this app instead of the full app.",
+                        player,
+                    ) { player = it }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(CarOptions(keepMediaServices = player, fillScreen = fill)) }) {
+                Text("Add to car")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun ChoiceRow(title: String, body: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(top = 16.dp).toggleable(value = checked, role = Role.Switch, onValueChange = onChange),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            Text(body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Spacer(Modifier.width(12.dp))
+        Switch(checked = checked, onCheckedChange = null)
     }
 }
 

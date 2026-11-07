@@ -34,7 +34,7 @@ class MainActivity : ComponentActivity() {
             openAndroidAuto = ::openAndroidAuto,
             markDeveloperMode = model::markDeveloperMode,
             markUnknownSources = model::markUnknownSources,
-            add = { model.add(it, update = false) },
+            add = model::requestAdd,
             update = { copy -> copy.original?.let { model.add(it, update = true) } },
             updateAll = model::updateAll,
             openMorphe = { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(MORPHE_SOURCE))) },
@@ -43,6 +43,7 @@ class MainActivity : ComponentActivity() {
             remove = { copy -> startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:${copy.packageName}"))) },
         )
         UpdateCheck.schedule(this)
+        if (savedInstanceState == null) handleUpdateIntent(intent)
         lifecycleScope.launch {
             model.notificationPrompt.collect { askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS) }
         }
@@ -51,6 +52,17 @@ class MainActivity : ComponentActivity() {
                 HomeScreen(model, actions)
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleUpdateIntent(intent)
+    }
+
+    private fun handleUpdateIntent(intent: Intent) {
+        if (intent.action != UpdateCheck.ACTION_UPDATE) return
+        model.updateFromNotification(intent.getStringExtra(UpdateCheck.EXTRA_PACKAGE))
+        UpdateCheck.dismiss(this)
     }
 
     override fun onResume() {
