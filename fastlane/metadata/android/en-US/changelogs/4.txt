@@ -1,0 +1,2 @@
+- Option to keep an app's Android Auto audio player for its car copy
+- Android Auto rules are now shared with the CarBridge Patches bundle for Morphe
